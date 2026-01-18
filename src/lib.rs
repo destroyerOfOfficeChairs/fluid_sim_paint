@@ -1,7 +1,7 @@
 pub mod canvas;
-mod state;
-mod texture;
 
+use canvas::state;
+use canvas::texture;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,

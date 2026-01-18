@@ -154,7 +154,7 @@ impl State {
         // -----------------------------------------------------------------------
         let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Compute Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("compute.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/compute.wgsl").into()),
         });
 
         let compute_bind_group_layout =
@@ -207,7 +207,7 @@ impl State {
         // -----------------------------------------------------------------------
         let render_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Render Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
         });
 
         let render_bind_group_layout =
