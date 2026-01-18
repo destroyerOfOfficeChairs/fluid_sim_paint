@@ -1,3 +1,4 @@
+mod canvas_quad;
 mod state;
 mod texture;
 

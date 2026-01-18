@@ -1,61 +1,12 @@
+use crate::canvas_quad::*;
 use crate::texture;
 use std::{iter, sync::Arc};
 use wgpu::util::DeviceExt;
-use winit::{keyboard::KeyCode, window::Window};
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
-
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        tex_coords: [0.4131759, 0.00759614],
-    },
-    Vertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        tex_coords: [0.0048659444, 0.43041354],
-    },
-    Vertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        tex_coords: [0.28081453, 0.949397],
-    },
-    Vertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        tex_coords: [0.85967, 0.84732914],
-    },
-    Vertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        tex_coords: [0.9414737, 0.2652641],
-    },
-];
-
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
+use winit::{
+    event_loop::ActiveEventLoop,
+    keyboard::KeyCode,
+    window::{Fullscreen, Window},
+};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -63,14 +14,30 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub is_surface_configured: bool,
+    pub window: Arc<Window>,
+
+    // Render Pipeline (Drawing to Screen)
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
-    #[allow(dead_code)]
-    diffuse_texture: texture::Texture,
-    diffuse_bind_group: wgpu::BindGroup,
-    pub window: Arc<Window>,
+
+    // Compute Pipeline (The Physics/Simulation)
+    compute_pipeline: wgpu::ComputePipeline,
+
+    // The Ping-Pong Resources
+    texture_a: texture::Texture,
+    texture_b: texture::Texture,
+
+    // Bind Groups for COMPUTING (Input -> Output)
+    compute_bind_group_a: wgpu::BindGroup, // Read A -> Write B
+    compute_bind_group_b: wgpu::BindGroup, // Read B -> Write A
+
+    // Bind Groups for RENDERING (Sampling)
+    render_bind_group_a: wgpu::BindGroup, // Draw A
+    render_bind_group_b: wgpu::BindGroup, // Draw B
+
+    frame_num: usize,
 }
 
 impl State {
@@ -85,10 +52,9 @@ impl State {
         });
 
         let surface = instance.create_surface(window.clone()).unwrap();
-
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::HighPerformance, // Request decent GPU
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -124,18 +90,129 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: surface_caps.present_modes[0],
+            present_mode: wgpu::PresentMode::AutoVsync, // Vsync ON
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
 
-        let diffuse_bytes = include_bytes!("happy-tree.png");
-        let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
+        // -----------------------------------------------------------------------
+        // 1. Create the Ping-Pong Textures
+        // -----------------------------------------------------------------------
+        // We use a fixed grid size for the simulation (e.g., 512x512)
+        // This is independent of the window size!
+        let sim_width = 512;
+        let sim_height = 512;
 
-        let texture_bind_group_layout =
+        let texture_a = texture::Texture::create_storage_texture(
+            &device,
+            sim_width,
+            sim_height,
+            Some("Texture A"),
+        );
+        let texture_b = texture::Texture::create_storage_texture(
+            &device,
+            sim_width,
+            sim_height,
+            Some("Texture B"),
+        );
+
+        // -----------------------------------------------------------------------
+        // 2. Initial Data Upload (Random Noise)
+        // -----------------------------------------------------------------------
+        // We fill Texture A with random noise so we have something to fade.
+        let mut initial_data = Vec::with_capacity((sim_width * sim_height * 4) as usize);
+        for _ in 0..(sim_width * sim_height) {
+            let r: u8 = rand::random();
+            let g: u8 = rand::random();
+            let b: u8 = rand::random();
+            initial_data.extend_from_slice(&[r, g, b, 255]);
+        }
+
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture_a.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &initial_data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * sim_width),
+                rows_per_image: Some(sim_height),
+            },
+            wgpu::Extent3d {
+                width: sim_width,
+                height: sim_height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        // -----------------------------------------------------------------------
+        // 3. Compute Pipeline Setup
+        // -----------------------------------------------------------------------
+        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Compute Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("compute.wgsl").into()),
+        });
+
+        let compute_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Compute Bind Group Layout"),
+                entries: &[
+                    // Binding 0: Input Texture (Read Only)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // Binding 1: Output Texture (Storage Write)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba8Unorm, // Must match texture creation!
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let compute_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Compute Pipeline Layout"),
+                bind_group_layouts: &[&compute_bind_group_layout],
+                immediate_size: 0,
+            });
+
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Compute Pipeline"),
+            layout: Some(&compute_pipeline_layout),
+            module: &compute_shader,
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        // -----------------------------------------------------------------------
+        // 4. Render Pipeline Setup (The Visualization)
+        // -----------------------------------------------------------------------
+        let render_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Render Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+
+        let render_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Render Bind Group Layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -154,33 +231,12 @@ impl State {
                         count: None,
                     },
                 ],
-                label: Some("texture_bind_group_layout"),
             });
-
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-        });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout],
+                bind_group_layouts: &[&render_bind_group_layout],
                 immediate_size: 0,
             });
 
@@ -188,13 +244,13 @@ impl State {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: &render_shader,
                 entry_point: Some("vs_main"),
                 buffers: &[Vertex::desc()],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: &render_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
@@ -213,13 +269,77 @@ impl State {
                 conservative: false,
             },
             depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None,
+        });
+
+        // -----------------------------------------------------------------------
+        // 5. Create All Bind Groups
+        // -----------------------------------------------------------------------
+
+        // COMPUTE A: Read A -> Write B
+        let compute_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_a.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&texture_b.view),
+                },
+            ],
+            label: Some("Compute Bind Group A"),
+        });
+
+        // COMPUTE B: Read B -> Write A
+        let compute_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_b.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&texture_a.view),
+                },
+            ],
+            label: Some("Compute Bind Group B"),
+        });
+
+        // RENDER A: Draw A
+        let render_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &render_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_a.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&texture_a.sampler),
+                },
+            ],
+            label: Some("Render Bind Group A"),
+        });
+
+        // RENDER B: Draw B
+        let render_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &render_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_b.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&texture_b.sampler),
+                },
+            ],
+            label: Some("Render Bind Group B"),
         });
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -232,7 +352,6 @@ impl State {
             contents: bytemuck::cast_slice(INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
-        let num_indices = INDICES.len() as u32;
 
         Ok(Self {
             surface,
@@ -240,13 +359,19 @@ impl State {
             queue,
             config,
             is_surface_configured: false,
+            window,
             render_pipeline,
             vertex_buffer,
             index_buffer,
-            num_indices,
-            diffuse_texture,
-            diffuse_bind_group,
-            window,
+            num_indices: INDICES.len() as u32,
+            compute_pipeline,
+            texture_a,
+            texture_b,
+            compute_bind_group_a,
+            compute_bind_group_b,
+            render_bind_group_a,
+            render_bind_group_b,
+            frame_num: 0,
         })
     }
 
@@ -259,14 +384,18 @@ impl State {
         }
     }
 
-    pub fn handle_key(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        key: KeyCode,
-        pressed: bool,
-    ) {
-        match (key, pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
+    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, key: KeyCode, pressed: bool) {
+        if !pressed {
+            return;
+        }
+        match key {
+            KeyCode::Escape => event_loop.exit(),
+            KeyCode::F11 => match self.window.fullscreen() {
+                Some(_) => self.window.set_fullscreen(None),
+                None => self
+                    .window
+                    .set_fullscreen(Some(Fullscreen::Borderless(None))),
+            },
             _ => {}
         }
     }
@@ -283,12 +412,40 @@ impl State {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
+        // -------------------------------------------------------------------
+        // 1. COMPUTE PASS (The Physics)
+        // -------------------------------------------------------------------
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Compute Pass"),
+                timestamp_writes: None,
+            });
+            compute_pass.set_pipeline(&self.compute_pipeline);
+
+            // Ping-Pong Logic
+            if self.frame_num % 2 == 0 {
+                // Even Frame: Read A -> Write B
+                compute_pass.set_bind_group(0, &self.compute_bind_group_a, &[]);
+            } else {
+                // Odd Frame: Read B -> Write A
+                compute_pass.set_bind_group(0, &self.compute_bind_group_b, &[]);
+            }
+
+            // Dispatch 512x512 threads (in blocks of 16x16)
+            // 512 / 16 = 32
+            compute_pass.dispatch_workgroups(32, 32, 1);
+        }
+
+        // -------------------------------------------------------------------
+        // 2. RENDER PASS (The Drawing)
+        // -------------------------------------------------------------------
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -296,12 +453,7 @@ impl State {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
@@ -313,7 +465,16 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+
+            // Determine which texture holds the "latest" result to draw
+            if self.frame_num % 2 == 0 {
+                // We just wrote to B, so draw B
+                render_pass.set_bind_group(0, &self.render_bind_group_b, &[]);
+            } else {
+                // We just wrote to A, so draw A
+                render_pass.set_bind_group(0, &self.render_bind_group_a, &[]);
+            }
+
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
@@ -321,6 +482,9 @@ impl State {
 
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
+
+        self.frame_num += 1;
+
         Ok(())
     }
 }
