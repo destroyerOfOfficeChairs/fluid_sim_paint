@@ -1,4 +1,4 @@
-use crate::canvas_quad::*;
+use crate::canvas::quad::*;
 use crate::texture;
 use std::{iter, sync::Arc};
 use wgpu::util::DeviceExt;

@@ -1,4 +1,4 @@
-mod canvas_quad;
+pub mod canvas;
 mod state;
 mod texture;
 
