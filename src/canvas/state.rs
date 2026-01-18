@@ -30,6 +30,8 @@ pub struct State {
     compute_pipeline: wgpu::ComputePipeline,
 
     // The Ping-Pong Resources
+    sim_width: u32,
+    sim_height: u32,
     texture_a: texture::Texture,
     texture_b: texture::Texture,
 
@@ -48,7 +50,10 @@ impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<State> {
         let (surface, device, queue, config) = wgpu_init(window.clone()).await;
 
-        let (texture_a, texture_b) = create_ping_pong_textures(&device, &queue);
+        let sim_width = 80;
+        let sim_height = 45;
+        let (texture_a, texture_b) =
+            create_ping_pong_textures(&device, &queue, sim_width, sim_height);
 
         let (compute_pipeline, compute_bind_group_a, compute_bind_group_b) =
             create_compute_setup(&device, &texture_a, &texture_b);
@@ -79,6 +84,8 @@ impl State {
             index_buffer,
             num_indices: INDICES.len() as u32,
             compute_pipeline,
+            sim_width,
+            sim_height,
             texture_a,
             texture_b,
             compute_bind_group_a,
@@ -152,9 +159,16 @@ impl State {
                 compute_pass.set_bind_group(0, &self.compute_bind_group_b, &[]);
             }
 
-            // Dispatch 512x512 threads (in blocks of 16x16)
-            // 512 / 16 = 32
-            compute_pass.dispatch_workgroups(32, 32, 1);
+            // DYNAMIC DISPATCH
+            // The workgroup size is defined in compute.wgsl as (16, 16).
+            // We calculate how many groups are needed to cover the simulation width/height.
+            // The calculation (width + 15) / 16 ensures we round UP (ceiling division),
+            // so we don't cut off the edge if the size isn't perfectly divisible by 16.
+            let workgroup_size = 16;
+            let x_groups = (self.sim_width + workgroup_size - 1) / workgroup_size;
+            let y_groups = (self.sim_height + workgroup_size - 1) / workgroup_size;
+
+            compute_pass.dispatch_workgroups(x_groups, y_groups, 1);
         }
 
         // -------------------------------------------------------------------

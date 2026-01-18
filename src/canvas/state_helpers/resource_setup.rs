@@ -1,10 +1,11 @@
 use crate::canvas::texture::Texture;
 
-pub fn create_ping_pong_textures(device: &wgpu::Device, queue: &wgpu::Queue) -> (Texture, Texture) {
-    // We hardcode the simulation size here (or you could pass it in)
-    let sim_width = 512;
-    let sim_height = 512;
-
+pub fn create_ping_pong_textures(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    sim_width: u32,
+    sim_height: u32,
+) -> (Texture, Texture) {
     // 1. Create the textures
     let texture_a =
         Texture::create_storage_texture(device, sim_width, sim_height, Some("Texture A"));
