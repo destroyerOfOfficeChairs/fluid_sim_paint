@@ -10,6 +10,7 @@ impl Texture {
         device: &wgpu::Device,
         width: u32,
         height: u32,
+        format: wgpu::TextureFormat, // <--- NEW ARGUMENT
         label: Option<&str>,
     ) -> Self {
         let size = wgpu::Extent3d {
@@ -18,15 +19,13 @@ impl Texture {
             depth_or_array_layers: 1,
         };
 
-        let format = wgpu::TextureFormat::Rgba8Unorm;
-
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label,
             size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format,
+            format, // Use the passed argument
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::COPY_DST,

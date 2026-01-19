@@ -18,7 +18,8 @@ use winit::{
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct SimParams {
     time: f32,
-    padding: [f32; 3], // GPU structs must be 16-byte aligned
+    dt: f32,
+    padding: [f32; 2], // GPU structs must be 16-byte aligned
 }
 
 pub struct State {
@@ -42,8 +43,16 @@ pub struct State {
     // The Ping-Pong Resources
     sim_width: u32,
     sim_height: u32,
+
+    #[allow(unused)]
     texture_a: texture::Texture,
+    #[allow(unused)]
     texture_b: texture::Texture,
+
+    #[allow(unused)]
+    velocity_a: texture::Texture,
+    #[allow(unused)]
+    velocity_b: texture::Texture,
 
     // Bind Groups for COMPUTING (Input -> Output)
     compute_bind_group_a: wgpu::BindGroup, // Read A -> Write B
@@ -63,13 +72,14 @@ impl State {
         // Hardcoded for now, but these values need to be handled dynamically in the future.
         let sim_width = 80;
         let sim_height = 45;
-        let (texture_a, texture_b) =
+        let (texture_a, texture_b, velocity_a, velocity_b) =
             create_ping_pong_textures(&device, &queue, sim_width, sim_height);
 
         // 1. Create the initial data
         let sim_params = SimParams {
             time: 0.0,
-            padding: [0.0; 3],
+            dt: 0.0,
+            padding: [0.0; 2],
         };
 
         // 2. Create the Buffer (using wgpu::util::DeviceExt)
@@ -79,9 +89,8 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // ... Pass this buffer to create_compute_setup (See Step 3) ...
         let (compute_pipeline, compute_bind_group_a, compute_bind_group_b) =
-            create_compute_setup(&device, &texture_a, &texture_b, &params_buffer); // <--- UPDATE CALL
+            create_compute_setup(&device, &texture_a, &texture_b, &velocity_a, &params_buffer);
 
         let (render_pipeline, render_bind_group_a, render_bind_group_b) =
             create_render_setup(&device, &config, &texture_a, &texture_b);
@@ -105,6 +114,8 @@ impl State {
             sim_height,
             texture_a,
             texture_b,
+            velocity_a,
+            velocity_b,
             compute_bind_group_a,
             compute_bind_group_b,
             render_bind_group_a,
@@ -159,8 +170,9 @@ impl State {
 
         // Update the time uniform
         let params = SimParams {
-            time: self.frame_num as f32 * 0.01, // Speed of animation
-            padding: [0.0; 3],
+            time: self.frame_num as f32 * 0.01,
+            dt: 1.0, // Hardcode 1.0 for now so the wind is strong enough to see
+            padding: [0.0; 2],
         };
         self.queue
             .write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[params]));

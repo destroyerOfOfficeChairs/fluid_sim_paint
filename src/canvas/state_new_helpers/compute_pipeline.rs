@@ -4,6 +4,7 @@ pub fn create_compute_setup(
     device: &wgpu::Device,
     texture_a: &Texture,
     texture_b: &Texture,
+    velocity_texture: &Texture,   // <--- NEW ARGUMENT (Source of wind)
     params_buffer: &wgpu::Buffer, // <--- NEW ARGUMENT
 ) -> (wgpu::ComputePipeline, wgpu::BindGroup, wgpu::BindGroup) {
     let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -14,6 +15,7 @@ pub fn create_compute_setup(
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Compute Bind Group Layout"),
         entries: &[
+            // 0: Input Density
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -24,6 +26,7 @@ pub fn create_compute_setup(
                 },
                 count: None,
             },
+            // 1: Output Density
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -34,7 +37,7 @@ pub fn create_compute_setup(
                 },
                 count: None,
             },
-            // Binding 2: Sim Params (NEW)
+            // 2: Params
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -43,6 +46,24 @@ pub fn create_compute_setup(
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
+                count: None,
+            },
+            // 3: Velocity Texture (NEW)
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            // 4: Sampler (NEW - Needed for smooth advection)
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
         ],
@@ -63,47 +84,40 @@ pub fn create_compute_setup(
         cache: None,
     });
 
-    // UPDATE BIND GROUP A
-    let bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_a.view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(&texture_b.view),
-            },
-            // Add Binding 2
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: params_buffer.as_entire_binding(),
-            },
-        ],
-        label: Some("Compute Bind Group A"),
-    });
+    // Helper to create bind group to avoid code duplication
+    let create_bg = |label: &str, input: &Texture, output: &Texture| {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&input.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&output.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: params_buffer.as_entire_binding(),
+                },
+                // Bind Velocity (Always read from the one with wind for now)
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&velocity_texture.view),
+                },
+                // Bind Sampler (Reuse the sampler from density texture)
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&input.sampler),
+                },
+            ],
+            label: Some(label),
+        })
+    };
 
-    // UPDATE BIND GROUP B
-    let bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_b.view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(&texture_a.view),
-            },
-            // Add Binding 2
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: params_buffer.as_entire_binding(),
-            },
-        ],
-        label: Some("Compute Bind Group B"),
-    });
+    let bind_group_a = create_bg("Compute Bind Group A", texture_a, texture_b);
+    let bind_group_b = create_bg("Compute Bind Group B", texture_b, texture_a);
 
     (pipeline, bind_group_a, bind_group_b)
 }

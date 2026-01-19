@@ -32,7 +32,7 @@ pub async fn wgpu_init(
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
-            required_features: wgpu::Features::empty(),
+            required_features: wgpu::Features::FLOAT32_FILTERABLE,
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             required_limits: if cfg!(target_arch = "wasm32") {
                 wgpu::Limits::downlevel_webgl2_defaults()
