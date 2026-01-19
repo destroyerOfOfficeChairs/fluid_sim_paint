@@ -1,3 +1,5 @@
+use wgpu::util::DeviceExt;
+use wgpu::{Buffer, Device};
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
@@ -25,6 +27,20 @@ impl Vertex {
             ],
         }
     }
+}
+
+pub fn create_canvas_quad(device: &Device) -> (Buffer, Buffer, u32) {
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex Buffer"),
+        contents: bytemuck::cast_slice(VERTICES),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Index Buffer"),
+        contents: bytemuck::cast_slice(INDICES),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+    (vertex_buffer, index_buffer, INDICES.len() as u32)
 }
 
 pub const VERTICES: &[Vertex] = &[

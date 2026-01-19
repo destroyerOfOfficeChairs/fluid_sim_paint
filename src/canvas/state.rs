@@ -1,11 +1,10 @@
 use super::state_helpers::compute_pipeline::create_compute_setup;
+use super::state_helpers::quad::create_canvas_quad;
 use super::state_helpers::render_pipeline::create_render_setup;
 use super::state_helpers::resource_setup::create_ping_pong_textures;
 use super::state_helpers::wgpu_init::wgpu_init;
-use crate::canvas::quad::*;
 use crate::texture;
 use std::{iter, sync::Arc};
-use wgpu::util::DeviceExt;
 use winit::{
     event_loop::ActiveEventLoop,
     keyboard::KeyCode,
@@ -50,6 +49,7 @@ impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<State> {
         let (surface, device, queue, config) = wgpu_init(window.clone()).await;
 
+        // Hardcoded for now, but these values need to be handled dynamically in the future.
         let sim_width = 80;
         let sim_height = 45;
         let (texture_a, texture_b) =
@@ -61,16 +61,7 @@ impl State {
         let (render_pipeline, render_bind_group_a, render_bind_group_b) =
             create_render_setup(&device, &config, &texture_a, &texture_b);
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let (vertex_buffer, index_buffer, num_indices) = create_canvas_quad(&device);
 
         Ok(Self {
             surface,
@@ -82,7 +73,7 @@ impl State {
             render_pipeline,
             vertex_buffer,
             index_buffer,
-            num_indices: INDICES.len() as u32,
+            num_indices,
             compute_pipeline,
             sim_width,
             sim_height,

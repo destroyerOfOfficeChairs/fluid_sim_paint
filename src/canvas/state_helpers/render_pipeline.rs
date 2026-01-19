@@ -1,4 +1,4 @@
-use crate::canvas::quad::Vertex;
+use crate::canvas::state_helpers::quad::Vertex;
 use crate::canvas::texture::Texture;
 
 pub fn create_render_setup(
