@@ -3,6 +3,8 @@ use super::state_new_helpers::quad::create_canvas_quad;
 use super::state_new_helpers::render_pipeline::create_render_setup;
 use super::state_new_helpers::resource_setup::create_ping_pong_textures;
 use super::state_new_helpers::wgpu_init::wgpu_init;
+use super::state_render_helpers::compute::record_compute_pass;
+use super::state_render_helpers::draw::record_render_pass;
 use crate::texture;
 use std::{iter, sync::Arc};
 use winit::{
@@ -131,73 +133,29 @@ impl State {
                 label: Some("Render Encoder"),
             });
 
-        // -------------------------------------------------------------------
-        // 1. COMPUTE PASS (The Physics)
-        // -------------------------------------------------------------------
-        {
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Compute Pass"),
-                timestamp_writes: None,
-            });
-            compute_pass.set_pipeline(&self.compute_pipeline);
+        // 1. Run Physics
+        record_compute_pass(
+            &mut encoder,
+            &self.compute_pipeline,
+            &self.compute_bind_group_a,
+            &self.compute_bind_group_b,
+            self.frame_num,
+            self.sim_width,
+            self.sim_height,
+        );
 
-            // Ping-Pong Logic
-            if self.frame_num % 2 == 0 {
-                // Even Frame: Read A -> Write B
-                compute_pass.set_bind_group(0, &self.compute_bind_group_a, &[]);
-            } else {
-                // Odd Frame: Read B -> Write A
-                compute_pass.set_bind_group(0, &self.compute_bind_group_b, &[]);
-            }
-
-            // DYNAMIC DISPATCH
-            // The workgroup size is defined in compute.wgsl as (16, 16).
-            // We calculate how many groups are needed to cover the simulation width/height.
-            // The calculation (width + 15) / 16 ensures we round UP (ceiling division),
-            // so we don't cut off the edge if the size isn't perfectly divisible by 16.
-            let workgroup_size = 16;
-            let x_groups = (self.sim_width + workgroup_size - 1) / workgroup_size;
-            let y_groups = (self.sim_height + workgroup_size - 1) / workgroup_size;
-
-            compute_pass.dispatch_workgroups(x_groups, y_groups, 1);
-        }
-
-        // -------------------------------------------------------------------
-        // 2. RENDER PASS (The Drawing)
-        // -------------------------------------------------------------------
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline);
-
-            // Determine which texture holds the "latest" result to draw
-            if self.frame_num % 2 == 0 {
-                // We just wrote to B, so draw B
-                render_pass.set_bind_group(0, &self.render_bind_group_b, &[]);
-            } else {
-                // We just wrote to A, so draw A
-                render_pass.set_bind_group(0, &self.render_bind_group_a, &[]);
-            }
-
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-        }
+        // 2. Draw to Screen
+        record_render_pass(
+            &mut encoder,
+            &view,
+            &self.render_pipeline,
+            &self.render_bind_group_a,
+            &self.render_bind_group_b,
+            &self.vertex_buffer,
+            &self.index_buffer,
+            self.num_indices,
+            self.frame_num,
+        );
 
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
