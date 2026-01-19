@@ -4,6 +4,7 @@ pub fn create_compute_setup(
     device: &wgpu::Device,
     texture_a: &Texture,
     texture_b: &Texture,
+    params_buffer: &wgpu::Buffer, // <--- NEW ARGUMENT
 ) -> (wgpu::ComputePipeline, wgpu::BindGroup, wgpu::BindGroup) {
     let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Compute Shader"),
@@ -33,6 +34,17 @@ pub fn create_compute_setup(
                 },
                 count: None,
             },
+            // Binding 2: Sim Params (NEW)
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
 
@@ -51,6 +63,7 @@ pub fn create_compute_setup(
         cache: None,
     });
 
+    // UPDATE BIND GROUP A
     let bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
         entries: &[
@@ -62,10 +75,16 @@ pub fn create_compute_setup(
                 binding: 1,
                 resource: wgpu::BindingResource::TextureView(&texture_b.view),
             },
+            // Add Binding 2
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buffer.as_entire_binding(),
+            },
         ],
         label: Some("Compute Bind Group A"),
     });
 
+    // UPDATE BIND GROUP B
     let bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
         entries: &[
@@ -76,6 +95,11 @@ pub fn create_compute_setup(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::TextureView(&texture_a.view),
+            },
+            // Add Binding 2
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buffer.as_entire_binding(),
             },
         ],
         label: Some("Compute Bind Group B"),

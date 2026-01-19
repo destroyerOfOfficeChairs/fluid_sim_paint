@@ -7,11 +7,19 @@ use super::state_render_helpers::compute::record_compute_pass;
 use super::state_render_helpers::draw::record_render_pass;
 use crate::texture;
 use std::{iter, sync::Arc};
+use wgpu::util::DeviceExt;
 use winit::{
     event_loop::ActiveEventLoop,
     keyboard::KeyCode,
     window::{Fullscreen, Window},
 };
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct SimParams {
+    time: f32,
+    padding: [f32; 3], // GPU structs must be 16-byte aligned
+}
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -29,6 +37,7 @@ pub struct State {
 
     // Compute Pipeline (The Physics/Simulation)
     compute_pipeline: wgpu::ComputePipeline,
+    params_buffer: wgpu::Buffer,
 
     // The Ping-Pong Resources
     sim_width: u32,
@@ -57,8 +66,22 @@ impl State {
         let (texture_a, texture_b) =
             create_ping_pong_textures(&device, &queue, sim_width, sim_height);
 
+        // 1. Create the initial data
+        let sim_params = SimParams {
+            time: 0.0,
+            padding: [0.0; 3],
+        };
+
+        // 2. Create the Buffer (using wgpu::util::DeviceExt)
+        let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Sim Params Buffer"),
+            contents: bytemuck::cast_slice(&[sim_params]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // ... Pass this buffer to create_compute_setup (See Step 3) ...
         let (compute_pipeline, compute_bind_group_a, compute_bind_group_b) =
-            create_compute_setup(&device, &texture_a, &texture_b);
+            create_compute_setup(&device, &texture_a, &texture_b, &params_buffer); // <--- UPDATE CALL
 
         let (render_pipeline, render_bind_group_a, render_bind_group_b) =
             create_render_setup(&device, &config, &texture_a, &texture_b);
@@ -77,6 +100,7 @@ impl State {
             index_buffer,
             num_indices,
             compute_pipeline,
+            params_buffer,
             sim_width,
             sim_height,
             texture_a,
@@ -132,6 +156,14 @@ impl State {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
+        // Update the time uniform
+        let params = SimParams {
+            time: self.frame_num as f32 * 0.01, // Speed of animation
+            padding: [0.0; 3],
+        };
+        self.queue
+            .write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[params]));
 
         // 1. Run Physics
         record_compute_pass(
