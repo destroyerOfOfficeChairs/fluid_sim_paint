@@ -1,8 +1,8 @@
-use super::state_helpers::compute_pipeline::create_compute_setup;
-use super::state_helpers::quad::create_canvas_quad;
-use super::state_helpers::render_pipeline::create_render_setup;
-use super::state_helpers::resource_setup::create_ping_pong_textures;
-use super::state_helpers::wgpu_init::wgpu_init;
+use super::state_new_helpers::compute_pipeline::create_compute_setup;
+use super::state_new_helpers::quad::create_canvas_quad;
+use super::state_new_helpers::render_pipeline::create_render_setup;
+use super::state_new_helpers::resource_setup::create_ping_pong_textures;
+use super::state_new_helpers::wgpu_init::wgpu_init;
 use crate::texture;
 use std::{iter, sync::Arc};
 use winit::{
