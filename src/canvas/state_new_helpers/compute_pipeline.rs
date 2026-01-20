@@ -4,7 +4,8 @@ pub fn create_compute_setup(
     device: &wgpu::Device,
     texture_a: &Texture,
     texture_b: &Texture,
-    velocity_texture: &Texture,   // <--- NEW ARGUMENT (Source of wind)
+    velocity_a: &Texture,
+    velocity_b: &Texture,
     params_buffer: &wgpu::Buffer, // <--- NEW ARGUMENT
 ) -> (wgpu::ComputePipeline, wgpu::BindGroup, wgpu::BindGroup) {
     let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -66,6 +67,17 @@ pub fn create_compute_setup(
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            // 5: Output Velocity (NEW)
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::StorageTexture {
+                    access: wgpu::StorageTextureAccess::WriteOnly,
+                    format: wgpu::TextureFormat::Rg32Float, // Matches your texture creation
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
+                count: None,
+            },
         ],
     });
 
@@ -84,40 +96,47 @@ pub fn create_compute_setup(
         cache: None,
     });
 
-    // Helper to create bind group to avoid code duplication
-    let create_bg = |label: &str, input: &Texture, output: &Texture| {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&input.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&output.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-                // Bind Velocity (Always read from the one with wind for now)
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&velocity_texture.view),
-                },
-                // Bind Sampler (Reuse the sampler from density texture)
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(&input.sampler),
-                },
-            ],
-            label: Some(label),
-        })
-    };
+    // Helper to create bind group
+    let create_bg =
+        |label: &str, den_in: &Texture, den_out: &Texture, vel_in: &Texture, vel_out: &Texture| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&den_in.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&den_out.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                    // Velocity Input
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&vel_in.view),
+                    },
+                    // Sampler (Reused)
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::Sampler(&den_in.sampler),
+                    },
+                    // Velocity Output
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::TextureView(&vel_out.view),
+                    },
+                ],
+                label: Some(label),
+            })
+        };
 
-    let bind_group_a = create_bg("Compute Bind Group A", texture_a, texture_b);
-    let bind_group_b = create_bg("Compute Bind Group B", texture_b, texture_a);
+    // Correct Ping-Pong Wiring
+    let bind_group_a = create_bg("BG A", texture_a, texture_b, velocity_a, velocity_b);
+    let bind_group_b = create_bg("BG B", texture_b, texture_a, velocity_b, velocity_a);
 
     (pipeline, bind_group_a, bind_group_b)
 }

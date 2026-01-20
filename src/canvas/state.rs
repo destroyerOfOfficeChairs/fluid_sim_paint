@@ -89,8 +89,14 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let (compute_pipeline, compute_bind_group_a, compute_bind_group_b) =
-            create_compute_setup(&device, &texture_a, &texture_b, &velocity_a, &params_buffer);
+        let (compute_pipeline, compute_bind_group_a, compute_bind_group_b) = create_compute_setup(
+            &device,
+            &texture_a,
+            &texture_b,
+            &velocity_a,
+            &velocity_b, // Pass both now!
+            &params_buffer,
+        );
 
         let (render_pipeline, render_bind_group_a, render_bind_group_b) =
             create_render_setup(&device, &config, &texture_a, &texture_b);
