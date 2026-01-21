@@ -1,4 +1,3 @@
-// src/canvas/state_helpers/wgpu_init.rs
 use std::sync::Arc;
 use winit::window::Window;
 

@@ -10,7 +10,7 @@ impl Texture {
         device: &wgpu::Device,
         width: u32,
         height: u32,
-        format: wgpu::TextureFormat, // <--- NEW ARGUMENT
+        format: wgpu::TextureFormat,
         label: Option<&str>,
     ) -> Self {
         let size = wgpu::Extent3d {
@@ -50,4 +50,34 @@ impl Texture {
             sampler,
         }
     }
+}
+
+pub fn create_sim_textures(
+    device: &wgpu::Device,
+    sim_width: u32,
+    sim_height: u32,
+) -> (
+    Texture,
+    Texture,
+    Texture,
+    Texture,
+    Texture,
+    Texture,
+    Texture,
+) {
+    let closure = |name: &str, texture_type: wgpu::TextureFormat| {
+        Texture::create_storage_texture(device, sim_width, sim_height, texture_type, Some(name))
+    };
+    // For now, I just want the density to be greyscale, thus R32Float. I will
+    // implement color later, because this will ultimately be a painting program.
+    let density_a = closure("Density A", wgpu::TextureFormat::R32Float);
+    let density_b = closure("Density B", wgpu::TextureFormat::R32Float);
+    let velocity_a = closure("Velocity A", wgpu::TextureFormat::Rg32Float);
+    let velocity_b = closure("Velocity B", wgpu::TextureFormat::Rg32Float);
+    let pressure_a = closure("Pressure A", wgpu::TextureFormat::R32Float);
+    let pressure_b = closure("Pressure B", wgpu::TextureFormat::R32Float);
+    let divergence = closure("Pressure A", wgpu::TextureFormat::R32Float);
+    (
+        density_a, density_b, velocity_a, velocity_b, pressure_a, pressure_b, divergence,
+    )
 }
