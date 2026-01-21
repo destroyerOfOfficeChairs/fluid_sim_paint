@@ -68,10 +68,8 @@ pub fn create_sim_textures(
     let closure = |name: &str, texture_type: wgpu::TextureFormat| {
         Texture::create_storage_texture(device, sim_width, sim_height, texture_type, Some(name))
     };
-    // For now, I just want the density to be greyscale, thus R32Float. I will
-    // implement color later, because this will ultimately be a painting program.
-    let density_a = closure("Density A", wgpu::TextureFormat::R32Float);
-    let density_b = closure("Density B", wgpu::TextureFormat::R32Float);
+    let density_a = closure("Density A", wgpu::TextureFormat::Rgba32Float);
+    let density_b = closure("Density B", wgpu::TextureFormat::Rgba32Float);
     let velocity_a = closure("Velocity A", wgpu::TextureFormat::Rg32Float);
     let velocity_b = closure("Velocity B", wgpu::TextureFormat::Rg32Float);
     let pressure_a = closure("Pressure A", wgpu::TextureFormat::R32Float);
