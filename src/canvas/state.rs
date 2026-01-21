@@ -1,7 +1,10 @@
 use super::state_new_helpers::quad::create_canvas_quad;
+use super::state_new_helpers::render_pipeline::create_render_setup;
 use super::state_new_helpers::texture::Texture;
 use super::state_new_helpers::texture::create_sim_textures;
 use super::state_new_helpers::wgpu_init::wgpu_init;
+use super::state_render_helpers::draw::record_render_pass;
+use std::iter;
 use std::sync::Arc;
 use wgpu::Buffer;
 use winit::{
@@ -35,6 +38,9 @@ pub struct State {
     divergence: Texture,
 
     frame_num: usize,
+
+    render_pipeline: wgpu::RenderPipeline,
+    render_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -48,6 +54,11 @@ impl State {
             create_sim_textures(&device, sim_width, sim_height);
 
         let (vertex_buffer, index_buffer, num_indices) = create_canvas_quad(&device);
+
+        // Create the Render Pipeline (The "Viewer")
+        // We bind density_a for now. Since it's empty, it will look like a white page.
+        let (render_pipeline, render_bind_group) =
+            create_render_setup(&device, &config, &density_a);
 
         Ok(Self {
             surface,
@@ -69,6 +80,8 @@ impl State {
             pressure_b,
             divergence,
             frame_num: 0,
+            render_pipeline,
+            render_bind_group,
         })
     }
 
@@ -105,7 +118,30 @@ impl State {
             return Ok(());
         }
 
-        // TODO: implement render function
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        // Draw the Canvas
+        record_render_pass(
+            &mut encoder,
+            &view,
+            &self.render_pipeline,
+            &self.render_bind_group,
+            &self.vertex_buffer,
+            &self.index_buffer,
+            self.num_indices,
+        );
+
+        self.queue.submit(iter::once(encoder.finish()));
+        output.present();
 
         self.frame_num += 1;
 
