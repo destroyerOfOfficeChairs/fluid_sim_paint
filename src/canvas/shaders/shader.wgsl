@@ -1,4 +1,8 @@
-// Vertex Shader
+struct ViewUniforms {
+    scale: f32,
+    pan: vec2<f32>, 
+};
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) tex_coords: vec2<f32>,
@@ -9,16 +13,16 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
 };
 
+@group(0) @binding(2) var<uniform> view: ViewUniforms;
+
 @vertex
 fn vs_main(model: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    // SCALE FACTOR:
-    // We multiply by 0.8 to create a border around the canvas.
-    // This makes the "Paper" smaller than the "Window," revealing the Grey background.
-    // Later, we will use a Uniform to set this to exactly 1920x1080 pixels.
-    let scale = 0.8; 
     
-    out.clip_position = vec4<f32>(model.position * scale, 1.0);
+    // We multiply the position by the scale from the UI.
+    // (We will implement Pan later, so we ignore it for now)
+    out.clip_position = vec4<f32>(model.position * view.scale, 1.0);
+    
     out.tex_coords = model.tex_coords;
     return out;
 }

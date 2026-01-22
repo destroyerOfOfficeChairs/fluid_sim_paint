@@ -1,4 +1,5 @@
 pub mod canvas;
+pub mod gui_mod;
 
 use canvas::state;
 use std::sync::Arc;
@@ -100,6 +101,8 @@ impl ApplicationHandler<State> for App {
             Some(canvas) => canvas,
             None => return,
         };
+
+        state.handle_event(&event);
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),

@@ -1,10 +1,19 @@
 use crate::canvas::state_new_helpers::quad::Vertex;
 use crate::canvas::state_new_helpers::texture::Texture;
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ViewUniforms {
+    pub scale: f32,
+    pub pan: [f32; 2],
+    pub _padding: u32, // Padding to ensure 16-byte alignment (WebGPU requirement)
+}
+
 pub fn create_render_setup(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
     density_texture: &Texture,
+    view_buffer: &wgpu::Buffer,
 ) -> (wgpu::RenderPipeline, wgpu::BindGroup) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Render Shader"),
@@ -32,13 +41,24 @@ pub fn create_render_setup(
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            // Binding 2: View Uniforms
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::VERTEX, // Only used in Vertex Shader
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
         bind_group_layouts: &[&bind_group_layout],
-        immediate_size: 0,
+        push_constant_ranges: &[],
     });
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -71,7 +91,7 @@ pub fn create_render_setup(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview_mask: None,
+        multiview: None,
         cache: None,
     });
 
@@ -85,6 +105,10 @@ pub fn create_render_setup(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&density_texture.sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: view_buffer.as_entire_binding(),
             },
         ],
         label: Some("Render Bind Group"),

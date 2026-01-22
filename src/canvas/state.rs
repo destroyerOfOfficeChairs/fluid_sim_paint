@@ -1,5 +1,6 @@
+use super::super::gui_mod::gui::Gui;
 use super::state_new_helpers::quad::create_canvas_quad;
-use super::state_new_helpers::render_pipeline::create_render_setup;
+use super::state_new_helpers::render_pipeline::{ViewUniforms, create_render_setup};
 use super::state_new_helpers::texture::Texture;
 use super::state_new_helpers::texture::create_sim_textures;
 use super::state_new_helpers::wgpu_init::wgpu_init;
@@ -7,6 +8,7 @@ use super::state_render_helpers::draw::record_render_pass;
 use std::iter;
 use std::sync::Arc;
 use wgpu::Buffer;
+use wgpu::util::DeviceExt; // Needed for create_buffer_init
 use winit::{
     event_loop::ActiveEventLoop,
     keyboard::KeyCode,
@@ -21,6 +23,9 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     pub is_surface_configured: bool,
     pub window: Arc<Window>,
+
+    gui: Gui,
+    view_buffer: wgpu::Buffer,
 
     vertex_buffer: Buffer,
     index_buffer: Buffer,
@@ -53,12 +58,24 @@ impl State {
         let (density_a, density_b, velocity_a, velocity_b, pressure_a, pressure_b, divergence) =
             create_sim_textures(&device, sim_width, sim_height);
 
+        let gui = Gui::new(&window, &device, config.format);
+        let initial_uniforms = ViewUniforms {
+            scale: 0.8,
+            pan: [0.0, 0.0],
+            _padding: 0,
+        };
+        let view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("View Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[initial_uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let (vertex_buffer, index_buffer, num_indices) = create_canvas_quad(&device);
 
         // Create the Render Pipeline (The "Viewer")
         // We bind density_a for now. Since it's empty, it will look like a white page.
         let (render_pipeline, render_bind_group) =
-            create_render_setup(&device, &config, &density_a);
+            create_render_setup(&device, &config, &density_a, &view_buffer);
 
         Ok(Self {
             surface,
@@ -67,6 +84,8 @@ impl State {
             config,
             is_surface_configured: false,
             window,
+            gui,
+            view_buffer,
             vertex_buffer,
             index_buffer,
             num_indices,
@@ -83,6 +102,10 @@ impl State {
             render_pipeline,
             render_bind_group,
         })
+    }
+
+    pub fn handle_event(&mut self, event: &winit::event::WindowEvent) {
+        self.gui.handle_event(&self.window, event);
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -123,6 +146,20 @@ impl State {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        // 1. Get data from GUI
+        let current_uniforms = ViewUniforms {
+            scale: self.gui.params.zoom_level,
+            pan: [0.0, 0.0],
+            _padding: 0,
+        };
+
+        // 2. Write to GPU
+        self.queue.write_buffer(
+            &self.view_buffer,
+            0,
+            bytemuck::cast_slice(&[current_uniforms]),
+        );
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -138,6 +175,20 @@ impl State {
             &self.vertex_buffer,
             &self.index_buffer,
             self.num_indices,
+        );
+
+        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: self.window.scale_factor() as f32,
+        };
+
+        self.gui.render(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &self.window,
+            &view,
+            screen_descriptor,
         );
 
         self.queue.submit(iter::once(encoder.finish()));
