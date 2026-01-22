@@ -127,31 +127,25 @@ impl State {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // 1. UPDATE PHYSICS
-        // "Hey Canvas, update the brush using this input and these settings."
-        self.canvas.update_brush(
-            &self.queue,
-            &self.input,
-            &self.gui.params,
-            (self.config.width, self.config.height),
-        );
-
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
-        // 2. RENDER CANVAS
-        // "Hey Canvas, draw yourself into this view."
-        self.canvas.render(
-            &mut encoder,
-            &view,
+        // 1. UPDATE PHYSICS
+        // "Hey Canvas, update the brush using this input and these settings."
+        self.canvas.update_brush(
             &self.queue,
+            &mut encoder,
+            &self.input,
             &self.gui.params,
             (self.config.width, self.config.height),
-            &self.input,
         );
+
+        // 2. RENDER CANVAS
+        // "Hey Canvas, draw yourself into this view."
+        self.canvas.render(&mut encoder, &view);
 
         // 3. RENDER GUI
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
