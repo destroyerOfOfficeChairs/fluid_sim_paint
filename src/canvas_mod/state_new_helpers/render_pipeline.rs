@@ -1,4 +1,4 @@
-use crate::canvas::state_new_helpers::quad::Vertex;
+use crate::canvas_mod::state_new_helpers::quad::Vertex;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]

@@ -1,7 +1,7 @@
-pub mod canvas;
+pub mod canvas_mod;
 pub mod gui_mod;
 
-use canvas::state;
+use canvas_mod::state;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -49,7 +49,7 @@ impl ApplicationHandler<State> for App {
             let window = wgpu::web_sys::window().unwrap_throw();
             let document = window.document().unwrap_throw();
             let canvas = document.get_element_by_id(CANVAS_ID).unwrap_throw();
-            let html_canvas_element = canvas.unchecked_into();
+            let html_canvas_element = canvas_mod.unchecked_into();
             window_attributes = window_attributes.with_canvas(Some(html_canvas_element));
         }
 
