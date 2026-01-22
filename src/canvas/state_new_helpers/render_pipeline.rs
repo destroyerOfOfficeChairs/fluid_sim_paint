@@ -1,22 +1,20 @@
 use crate::canvas::state_new_helpers::quad::Vertex;
-use crate::canvas::state_new_helpers::texture::Texture;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ViewUniforms {
-    pub screen_size: [f32; 2], // 8 bytes
-    pub canvas_size: [f32; 2], // 8 bytes
-    pub pan: [f32; 2],         // 8 bytes
-    pub zoom: f32,             // 4 bytes
-    pub _padding: u32,         // 4 bytes (Align to 32 bytes)
+    pub screen_size: [f32; 2],
+    pub canvas_size: [f32; 2],
+    pub pan: [f32; 2],
+    pub zoom: f32,
+    pub _padding: u32,
 }
 
 pub fn create_render_setup(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
-    density_texture: &Texture,
-    view_buffer: &wgpu::Buffer,
-) -> (wgpu::RenderPipeline, wgpu::BindGroup) {
+    // REMOVED: density_texture and view_buffer args
+) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Render Shader"),
         source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
@@ -25,7 +23,7 @@ pub fn create_render_setup(
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Render Bind Group Layout"),
         entries: &[
-            // Binding 0: Texture
+            // 0: Texture
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::FRAGMENT,
@@ -36,17 +34,17 @@ pub fn create_render_setup(
                 },
                 count: None,
             },
-            // Binding 1: Sampler
+            // 1: Sampler
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
-            // Binding 2: View Uniforms
+            // 2: View Uniforms
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
-                visibility: wgpu::ShaderStages::VERTEX, // Only used in Vertex Shader
+                visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -97,24 +95,5 @@ pub fn create_render_setup(
         cache: None,
     });
 
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&density_texture.view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&density_texture.sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: view_buffer.as_entire_binding(),
-            },
-        ],
-        label: Some("Render Bind Group"),
-    });
-
-    (pipeline, bind_group)
+    (pipeline, bind_group_layout)
 }

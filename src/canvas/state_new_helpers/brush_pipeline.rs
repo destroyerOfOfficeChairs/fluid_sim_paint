@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct BrushUniforms {
     pub mouse_pos: [f32; 2],
-    pub last_mouse_pos: [f32; 2], // <--- NEW FIELD
+    pub last_mouse_pos: [f32; 2],
     pub radius: f32,
     pub strength: f32,
 }
@@ -17,13 +17,11 @@ pub struct BrushPipeline {
 
 impl BrushPipeline {
     pub fn new(device: &wgpu::Device) -> Self {
-        // 1. Create Shader
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Brush Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/brush.wgsl").into()),
         });
 
-        // 2. Create Layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Brush Bind Group Layout"),
             entries: &[
@@ -38,7 +36,7 @@ impl BrushPipeline {
                     },
                     count: None,
                 },
-                // Binding 1: Input Texture (Read)
+                // Binding 1: Density IN
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -49,13 +47,36 @@ impl BrushPipeline {
                     },
                     count: None,
                 },
-                // Binding 2: Output Texture (Write)
+                // Binding 2: Density OUT
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         access: wgpu::StorageTextureAccess::WriteOnly,
                         format: wgpu::TextureFormat::Rgba32Float,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                },
+                // --- NEW BINDINGS ---
+                // Binding 3: Velocity IN
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Binding 4: Velocity OUT
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rg32Float,
                         view_dimension: wgpu::TextureViewDimension::D2,
                     },
                     count: None,
@@ -78,7 +99,6 @@ impl BrushPipeline {
             cache: None,
         });
 
-        // 3. Create Buffer (Initial State)
         let initial_data = BrushUniforms {
             mouse_pos: [0.0, 0.0],
             last_mouse_pos: [0.0, 0.0],
