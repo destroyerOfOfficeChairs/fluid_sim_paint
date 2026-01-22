@@ -127,6 +127,16 @@ impl ApplicationHandler<State> for App {
                     },
                 ..
             } => state.handle_key(event_loop, code, key_state.is_pressed()),
+            WindowEvent::CursorMoved { position, .. } => {
+                state.handle_mouse([position.x as f32, position.y as f32]);
+            }
+            WindowEvent::MouseInput {
+                state: button_state,
+                button,
+                ..
+            } => {
+                state.handle_click(button_state, button);
+            }
             _ => {}
         }
     }
