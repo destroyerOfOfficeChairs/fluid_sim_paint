@@ -1,10 +1,10 @@
-use crate::canvas::state_new_helpers::texture::Texture;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct BrushUniforms {
     pub mouse_pos: [f32; 2],
+    pub last_mouse_pos: [f32; 2], // <--- NEW FIELD
     pub radius: f32,
     pub strength: f32,
 }
@@ -81,6 +81,7 @@ impl BrushPipeline {
         // 3. Create Buffer (Initial State)
         let initial_data = BrushUniforms {
             mouse_pos: [0.0, 0.0],
+            last_mouse_pos: [0.0, 0.0],
             radius: 20.0,
             strength: 0.0,
         };

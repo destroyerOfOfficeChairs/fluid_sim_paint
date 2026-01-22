@@ -29,6 +29,7 @@ pub struct State {
     gui: Gui,
     view_buffer: wgpu::Buffer,
     pub mouse_pos: [f32; 2],
+    pub last_mouse_pos: [f32; 2],
     pub mouse_pressed: bool,
 
     vertex_buffer: Buffer,
@@ -95,6 +96,7 @@ impl State {
             gui,
             view_buffer,
             mouse_pos: [0.0, 0.0],
+            last_mouse_pos: [0.0, 0.0],
             mouse_pressed: false,
             vertex_buffer,
             index_buffer,
@@ -198,35 +200,36 @@ impl State {
             });
 
         // --- BRUSH STEP ---
-
         if self.mouse_pressed {
-            // 1. Calculate Grid Coordinates (The Math)
-            // Screen Center
-            let screen_center_x = self.config.width as f32 / 2.0;
-            let screen_center_y = self.config.height as f32 / 2.0;
+            // 1. HELPER: Coord conversion function (prevents copy-paste errors)
+            // You can define this closure right here inside render
+            let to_grid = |screen_pos: [f32; 2]| -> [f32; 2] {
+                let screen_center_x = self.config.width as f32 / 2.0;
+                let screen_center_y = self.config.height as f32 / 2.0;
+                let offset_x = screen_pos[0] - screen_center_x;
+                let offset_y = screen_pos[1] - screen_center_y;
+                let zoom = self.gui.params.zoom_level;
+                let grid_center_x = self.sim_width as f32 / 2.0;
+                let grid_center_y = self.sim_height as f32 / 2.0;
+                [
+                    grid_center_x + (offset_x / zoom),
+                    grid_center_y + (offset_y / zoom),
+                ]
+            };
 
-            // Mouse offset from center
-            let offset_x = self.mouse_pos[0] - screen_center_x;
-            let offset_y = self.mouse_pos[1] - screen_center_y;
+            let current_grid = to_grid(self.mouse_pos);
 
-            // Apply Zoom (Inverse)
-            let zoom = self.gui.params.zoom_level;
-            let unscaled_x = offset_x / zoom;
-            let unscaled_y = offset_y / zoom;
+            // IMPORTANT: If we just started clicking, 'last' might be stale.
+            // For a paint app, it's safer to treat the 'last' position as valid
+            // only if we were dragging. But for simplicity, we'll assume the
+            // user tracks 'last_mouse_pos' every frame regardless of clicking.
+            let last_grid = to_grid(self.last_mouse_pos);
 
-            // Grid Center
-            let grid_center_x = self.sim_width as f32 / 2.0;
-            let grid_center_y = self.sim_height as f32 / 2.0;
-
-            // Final Grid Pos
-            let grid_x = grid_center_x + unscaled_x;
-            let grid_y = grid_center_y + unscaled_y; // Note: Y might need flipping depending on coords
-
-            // 2. Update Uniforms
             let brush_data = BrushUniforms {
-                mouse_pos: [grid_x, grid_y],
-                radius: self.gui.params.brush_size / zoom, // Scale radius so it stays visually consistent
-                strength: 0.5,                             // Hardcoded opacity for now
+                mouse_pos: current_grid,
+                last_mouse_pos: last_grid, // <--- Send the segment start
+                radius: self.gui.params.brush_size / self.gui.params.zoom_level,
+                strength: 1.0, // Set to 1.0 for solid black lines!
             };
 
             self.queue.write_buffer(
@@ -306,6 +309,9 @@ impl State {
             &view,
             screen_descriptor,
         );
+
+        // IMPORTANT: Update last_mouse_pos for the NEXT frame
+        self.last_mouse_pos = self.mouse_pos;
 
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
