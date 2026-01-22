@@ -1,10 +1,10 @@
-use super::state::InteractionState;
-use super::state_new_helpers::brush_pipeline::{BrushPipeline, BrushUniforms};
-use super::state_new_helpers::quad::create_canvas_quad;
-use super::state_new_helpers::render_pipeline::{ViewUniforms, create_render_setup};
-use super::state_new_helpers::texture::{Texture, create_sim_textures};
-use super::state_render_helpers::draw::record_render_pass;
+use super::pipelines::brush_pipeline::{BrushPipeline, BrushUniforms};
+use super::pipelines::draw::record_render_pass;
+use super::pipelines::render_pipeline::{ViewUniforms, create_render_setup};
+use super::resources::quad::create_canvas_quad;
+use super::resources::texture::{Texture, create_sim_textures};
 use crate::gui_mod::gui::GuiParams;
+use crate::state::InteractionState;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Buffer, CommandEncoder, Device, Queue, RenderPipeline, TextureView}; // We'll need to make InteractionState public in state.rs
 

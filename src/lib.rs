@@ -1,7 +1,9 @@
 pub mod canvas_mod;
 pub mod gui_mod;
+pub mod state;
+pub mod wgpu_utils;
 
-use canvas_mod::state;
+use state::State;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -13,8 +15,6 @@ use winit::{
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-
-use state::State;
 
 pub struct App {
     #[cfg(target_arch = "wasm32")]

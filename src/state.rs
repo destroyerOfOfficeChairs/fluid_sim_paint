@@ -1,6 +1,6 @@
-use super::super::gui_mod::gui::Gui;
-use super::canvas::Canvas; // Import your new object
-use super::state_new_helpers::wgpu_init::wgpu_init;
+use super::canvas_mod::canvas::Canvas; // Import your new object
+use crate::gui_mod::gui::Gui;
+use crate::wgpu_utils::wgpu_init;
 use std::iter;
 use std::sync::Arc;
 use winit::event::{ElementState, MouseButton};
