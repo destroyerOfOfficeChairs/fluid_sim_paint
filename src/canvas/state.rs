@@ -60,8 +60,10 @@ impl State {
 
         let gui = Gui::new(&window, &device, config.format);
         let initial_uniforms = ViewUniforms {
-            scale: 0.8,
+            screen_size: [config.width as f32, config.height as f32],
+            canvas_size: [1920.0, 1080.0],
             pan: [0.0, 0.0],
+            zoom: gui.params.zoom_level,
             _padding: 0,
         };
         let view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -146,14 +148,23 @@ impl State {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // 1. Get data from GUI
+        // Get data from GUI
         let current_uniforms = ViewUniforms {
-            scale: self.gui.params.zoom_level,
+            // The Real Window Size
+            screen_size: [self.config.width as f32, self.config.height as f32],
+
+            // The Desired Canvas Size (From your UI)
+            canvas_size: [
+                self.gui.params.canvas_width as f32,
+                self.gui.params.canvas_height as f32,
+            ],
+
             pan: [0.0, 0.0],
+            zoom: self.gui.params.zoom_level,
             _padding: 0,
         };
 
-        // 2. Write to GPU
+        // Write to GPU
         self.queue.write_buffer(
             &self.view_buffer,
             0,

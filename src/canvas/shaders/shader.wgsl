@@ -1,6 +1,8 @@
 struct ViewUniforms {
-    scale: f32,
-    pan: vec2<f32>, 
+    screen_size: vec2<f32>,
+    canvas_size: vec2<f32>,
+    pan: vec2<f32>,
+    zoom: f32,
 };
 
 struct VertexInput {
@@ -18,11 +20,19 @@ struct VertexOutput {
 @vertex
 fn vs_main(model: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    
-    // We multiply the position by the scale from the UI.
-    // (We will implement Pan later, so we ignore it for now)
-    out.clip_position = vec4<f32>(model.position * view.scale, 1.0);
-    
+
+    // Calculate the Ratio (Target Pixels / Screen Pixels)
+    // Example: 1920 / 3840 = 0.5 (Take up half the screen)
+    let size_ratio = view.canvas_size / view.screen_size;
+
+    // Apply Zoom
+    let final_scale = size_ratio * view.zoom;
+
+    // Apply to Vertex Position
+    // We only scale X and Y. We add Pan here too for the future.
+    let pos_xy = (model.position.xy * final_scale) + view.pan;
+
+    out.clip_position = vec4<f32>(pos_xy, 0.0, 1.0);
     out.tex_coords = model.tex_coords;
     return out;
 }

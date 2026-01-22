@@ -14,7 +14,7 @@ pub struct GuiParams {
 impl Default for GuiParams {
     fn default() -> Self {
         Self {
-            zoom_level: 0.8,
+            zoom_level: 1.0,
             brush_size: 20.0,
             canvas_width: 1920,
             canvas_height: 1080,

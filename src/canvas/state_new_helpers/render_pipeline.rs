@@ -4,9 +4,11 @@ use crate::canvas::state_new_helpers::texture::Texture;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ViewUniforms {
-    pub scale: f32,
-    pub pan: [f32; 2],
-    pub _padding: u32, // Padding to ensure 16-byte alignment (WebGPU requirement)
+    pub screen_size: [f32; 2], // 8 bytes
+    pub canvas_size: [f32; 2], // 8 bytes
+    pub pan: [f32; 2],         // 8 bytes
+    pub zoom: f32,             // 4 bytes
+    pub _padding: u32,         // 4 bytes (Align to 32 bytes)
 }
 
 pub fn create_render_setup(
