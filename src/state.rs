@@ -131,21 +131,17 @@ impl State {
                 label: Some("Render Encoder"),
             });
 
-        // 1. UPDATE PHYSICS
-        // "Hey Canvas, update the brush using this input and these settings."
-        self.canvas.update_brush(
+        // RENDER CANVAS
+        self.canvas.render(
             &self.queue,
             &mut encoder,
-            &self.input,
+            &view,
             &self.gui.params,
+            &self.input,
             (self.config.width, self.config.height),
         );
 
-        // 2. RENDER CANVAS
-        // "Hey Canvas, draw yourself into this view."
-        self.canvas.render(&mut encoder, &view);
-
-        // 3. RENDER GUI
+        // RENDER GUI
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [self.config.width, self.config.height],
             pixels_per_point: self.window.scale_factor() as f32,

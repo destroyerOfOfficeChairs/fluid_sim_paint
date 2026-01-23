@@ -27,13 +27,13 @@ impl Canvas {
         height: u32,
         default_zoom: f32,
     ) -> Self {
-        // 1. Initialize the Physics Engine
+        // Initialize the Physics Engine
         let sim = FluidSim::new(device, width, height);
 
-        // 2. Setup Geometry (The Quad)
+        // Setup Geometry (The Quad)
         let (vertex_buffer, index_buffer, num_indices) = create_canvas_quad(device);
 
-        // 3. Setup View Uniforms (Camera)
+        // Setup View Uniforms (Camera)
         let initial_uniforms = ViewUniforms {
             screen_size: [config.width as f32, config.height as f32],
             canvas_size: [width as f32, height as f32],
@@ -48,10 +48,10 @@ impl Canvas {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // 4. Setup Render Pipeline
+        // Setup Render Pipeline
         let (render_pipeline, render_layout) = create_render_setup(device, config);
 
-        // 5. Create Render Bind Groups
+        // Create Render Bind Groups
         // CRITICAL: We bind to the textures OWNED by 'sim'
         let create_render_bg = |tex: &super::resources::texture::Texture| -> BindGroup {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -90,15 +90,16 @@ impl Canvas {
         }
     }
 
-    pub fn update_brush(
+    pub fn render(
         &mut self,
         queue: &Queue,
         encoder: &mut CommandEncoder,
-        input: &InteractionState,
+        view: &TextureView,
         params: &GuiParams,
+        input: &InteractionState,
         screen_size: (u32, u32),
     ) {
-        // 1. Always update View Buffer (so panning/zooming works even if not drawing)
+        // Always update View Buffer (so panning/zooming works even if not drawing)
         let current_uniforms = ViewUniforms {
             screen_size: [screen_size.0 as f32, screen_size.1 as f32],
             canvas_size: [self.sim.width as f32, self.sim.height as f32],
@@ -112,13 +113,42 @@ impl Canvas {
             bytemuck::cast_slice(&[current_uniforms]),
         );
 
-        // 2. Logic Check: Only run physics if mouse is clicked
+        // Update Brush/Physics
+        self.update_brush(queue, encoder, input, params, screen_size);
+
+        // Render the texture that matches the current Sim frame
+        let render_index = (self.sim.frame_num + 1) % 2;
+
+        record_render_pass(
+            encoder,
+            view,
+            &self.render_pipeline,
+            &self.render_bind_groups[render_index],
+            &self.vertex_buffer,
+            &self.index_buffer,
+            self.num_indices,
+        );
+    }
+
+    // Here's a question:
+    // Do we need to split brush strokes away from physics?
+    // So, adding a brush stroke would be one function,
+    // and updating the physics engine would be another.
+    pub fn update_brush(
+        &mut self,
+        queue: &Queue,
+        encoder: &mut CommandEncoder,
+        input: &InteractionState,
+        params: &GuiParams,
+        screen_size: (u32, u32),
+    ) {
+        // Logic Check: Only run physics if mouse is clicked
         if !input.mouse_pressed {
-            self.sim.step();
+            // self.sim.step();
             return;
         }
 
-        // 3. Coordinate Transformation (Screen -> Grid)
+        // Coordinate Transformation (Screen -> Grid)
         let to_grid = |screen_pos: [f32; 2]| -> [f32; 2] {
             let screen_center_x = screen_size.0 as f32 / 2.0;
             let screen_center_y = screen_size.1 as f32 / 2.0;
@@ -136,33 +166,12 @@ impl Canvas {
         let current_grid = to_grid(input.mouse_pos);
         let last_grid = to_grid(input.last_mouse_pos);
 
-        // 4. Delegate to Sim
+        // Delegate to Sim
         self.sim
             .add_forces(queue, encoder, current_grid, last_grid, params);
 
-        // 5. Advance Time
+        // Advance Time
         // We only step if we actually drew something (for now)
         self.sim.step();
-    }
-
-    pub fn render(&self, encoder: &mut CommandEncoder, view: &TextureView) {
-        // Render the texture that matches the current Sim frame
-        // If Sim just wrote to B (frame 0), we want to render B.
-        // But Sim.step() incremented frame to 1.
-        // So we want index (1-1)%2 = 0?
-        // Sync logic: Sim writes to 'frame % 2'. We display 'frame % 2'.
-        // Wait, if Sim writes B, B is the latest. We want to see B.
-        // Let's stick to: Render index matches the "Output" of the previous step.
-        let render_index = (self.sim.frame_num + 1) % 2;
-
-        record_render_pass(
-            encoder,
-            view,
-            &self.render_pipeline,
-            &self.render_bind_groups[render_index],
-            &self.vertex_buffer,
-            &self.index_buffer,
-            self.num_indices,
-        );
     }
 }
