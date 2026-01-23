@@ -131,13 +131,21 @@ impl State {
                 label: Some("Render Encoder"),
             });
 
-        // RENDER CANVAS
+        // UPDATE CANVAS (Physics & Input)
+        self.canvas.update(
+            &self.queue,
+            &mut encoder,
+            &self.input,
+            &self.gui.params,
+            (self.config.width, self.config.height),
+        );
+
+        // RENDER CANVAS (Draw to Screen)
         self.canvas.render(
             &self.queue,
             &mut encoder,
             &view,
             &self.gui.params,
-            &self.input,
             (self.config.width, self.config.height),
         );
 

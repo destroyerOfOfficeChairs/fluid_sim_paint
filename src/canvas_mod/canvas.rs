@@ -90,51 +90,9 @@ impl Canvas {
         }
     }
 
-    pub fn render(
-        &mut self,
-        queue: &Queue,
-        encoder: &mut CommandEncoder,
-        view: &TextureView,
-        params: &GuiParams,
-        input: &InteractionState,
-        screen_size: (u32, u32),
-    ) {
-        // Always update View Buffer (so panning/zooming works even if not drawing)
-        let current_uniforms = ViewUniforms {
-            screen_size: [screen_size.0 as f32, screen_size.1 as f32],
-            canvas_size: [self.sim.width as f32, self.sim.height as f32],
-            pan: [0.0, 0.0],
-            zoom: params.zoom_level,
-            _padding: 0,
-        };
-        queue.write_buffer(
-            &self.view_buffer,
-            0,
-            bytemuck::cast_slice(&[current_uniforms]),
-        );
-
-        // Update Brush/Physics
-        self.update_brush(queue, encoder, input, params, screen_size);
-
-        // Render the texture that matches the current Sim frame
-        let render_index = (self.sim.frame_num + 1) % 2;
-
-        record_render_pass(
-            encoder,
-            view,
-            &self.render_pipeline,
-            &self.render_bind_groups[render_index],
-            &self.vertex_buffer,
-            &self.index_buffer,
-            self.num_indices,
-        );
-    }
-
-    // Here's a question:
-    // Do we need to split brush strokes away from physics?
-    // So, adding a brush stroke would be one function,
-    // and updating the physics engine would be another.
-    pub fn update_brush(
+    // PHASE 1: PHYSICS & LOGIC
+    // This updates the state of the world (Sim).
+    pub fn update(
         &mut self,
         queue: &Queue,
         encoder: &mut CommandEncoder,
@@ -142,12 +100,29 @@ impl Canvas {
         params: &GuiParams,
         screen_size: (u32, u32),
     ) {
-        // Logic Check: Only run physics if mouse is clicked
-        if !input.mouse_pressed {
-            // self.sim.step();
-            return;
+        // ALWAYS Run Physics (Advection)
+        // Even if mouse is up, the fluid must move (or at least copy A -> B)
+        // self.sim.advect(encoder);
+
+        // CONDITIONALLY Run Input (Brush)
+        if input.mouse_pressed {
+            self.apply_brush(queue, encoder, input, params, screen_size);
         }
 
+        // ALWAYS Step Time
+        // The simulation clock never stops.
+        self.sim.step();
+    }
+
+    // Helper: Logic to apply forces (Just the math/dispatch)
+    fn apply_brush(
+        &mut self,
+        queue: &Queue,
+        encoder: &mut CommandEncoder,
+        input: &InteractionState,
+        params: &GuiParams,
+        screen_size: (u32, u32),
+    ) {
         // Coordinate Transformation (Screen -> Grid)
         let to_grid = |screen_pos: [f32; 2]| -> [f32; 2] {
             let screen_center_x = screen_size.0 as f32 / 2.0;
@@ -166,12 +141,45 @@ impl Canvas {
         let current_grid = to_grid(input.mouse_pos);
         let last_grid = to_grid(input.last_mouse_pos);
 
-        // Delegate to Sim
         self.sim
             .add_forces(queue, encoder, current_grid, last_grid, params);
+    }
 
-        // Advance Time
-        // We only step if we actually drew something (for now)
-        self.sim.step();
+    // PHASE 2: DRAWING
+    // This strictly draws the current state to the screen. It changes nothing.
+    pub fn render(
+        &self,
+        queue: &Queue,
+        encoder: &mut CommandEncoder,
+        view: &TextureView,
+        params: &GuiParams,
+        screen_size: (u32, u32),
+    ) {
+        // Update View Uniforms (Camera)
+        let current_uniforms = ViewUniforms {
+            screen_size: [screen_size.0 as f32, screen_size.1 as f32],
+            canvas_size: [self.sim.width as f32, self.sim.height as f32],
+            pan: [0.0, 0.0],
+            zoom: params.zoom_level,
+            _padding: 0,
+        };
+        queue.write_buffer(
+            &self.view_buffer,
+            0,
+            bytemuck::cast_slice(&[current_uniforms]),
+        );
+
+        // Calculate which texture to draw
+        let render_index = (self.sim.frame_num + 1) % 2;
+
+        record_render_pass(
+            encoder,
+            view,
+            &self.render_pipeline,
+            &self.render_bind_groups[render_index],
+            &self.vertex_buffer,
+            &self.index_buffer,
+            self.num_indices,
+        );
     }
 }
