@@ -36,8 +36,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     // Result = Pos - (Velocity * Time)
     let back_pos = pos - (velocity * dt);
 
-    // 4. Sample the Old Frame at that "Backwards" position
-    let back_uv = (back_pos + 0.5) / vec2<f32>(params.width, params.height);
+    // CRITICAL FIX: Clamp the lookup to be inside the texture!
+    // This prevents the "Streaking" artifacts from wrapping around.
+    let clamped_pos = clamp(back_pos, vec2<f32>(0.0, 0.0), vec2<f32>(params.width - 1.0, params.height - 1.0));
+
+    // 4. Sample using the CLAMPED position
+    let back_uv = (clamped_pos + 0.5) / vec2<f32>(params.width, params.height);
     
     let advected_density = textureSampleLevel(density_in, tex_sampler, back_uv, 0.0);
     let advected_velocity = textureSampleLevel(velocity_in, tex_sampler, back_uv, 0.0);
