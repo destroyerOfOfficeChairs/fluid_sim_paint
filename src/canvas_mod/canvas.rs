@@ -124,7 +124,9 @@ impl Canvas {
             );
         }
 
-        // No step() needed anymore!
+        // 3. Project (Clean up Velocity A -> B -> A)
+        // This makes the liquid swirly!
+        self.sim.project(encoder);
     }
 
     // Helper: Logic to apply forces (Just the math/dispatch)
