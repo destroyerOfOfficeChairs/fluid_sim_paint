@@ -110,7 +110,7 @@ impl AdvectionPipeline {
             dt: 0.016, // 60 FPS
             width: width as f32,
             height: height as f32,
-            dissipation: 0.99, // Fade factor (Ink slowly disappears)
+            dissipation: 0.999, // Fade factor (Ink slowly disappears)
         };
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

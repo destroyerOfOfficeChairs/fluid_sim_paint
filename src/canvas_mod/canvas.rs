@@ -76,7 +76,7 @@ impl Canvas {
 
         let render_bind_groups = vec![
             create_render_bg(&sim.density_a),
-            create_render_bg(&sim.density_b),
+            // create_render_bg(&sim.density_b),
         ];
 
         Self {
@@ -100,18 +100,31 @@ impl Canvas {
         params: &GuiParams,
         screen_size: (u32, u32),
     ) {
-        // ALWAYS Run Physics (Advection)
-        // Even if mouse is up, the fluid must move (or at least copy A -> B)
+        // 1. Step 1: Advect (A -> B)
         self.sim.advect(encoder);
 
-        // CONDITIONALLY Run Input (Brush)
+        // 2. Step 2: Brush (B -> A)
+        // If mouse is pressed, we run the brush shader which reads B and writes A.
         if input.mouse_pressed {
             self.apply_brush(queue, encoder, input, params, screen_size);
+        } else {
+            // CRITICAL: If mouse is NOT pressed, we still need to get data from B back to A!
+            // Otherwise A stays stale.
+            // For now, simple hack: Just run the brush with 0 strength/radius?
+            // BETTER: Just copy B back to A using a simple copy command.
+            encoder.copy_texture_to_texture(
+                self.sim.density_b.texture.as_image_copy(),
+                self.sim.density_a.texture.as_image_copy(),
+                self.sim.density_a.texture.size(),
+            );
+            encoder.copy_texture_to_texture(
+                self.sim.velocity_b.texture.as_image_copy(),
+                self.sim.velocity_a.texture.as_image_copy(),
+                self.sim.velocity_a.texture.size(),
+            );
         }
 
-        // ALWAYS Step Time
-        // The simulation clock never stops.
-        self.sim.step();
+        // No step() needed anymore!
     }
 
     // Helper: Logic to apply forces (Just the math/dispatch)
@@ -169,14 +182,11 @@ impl Canvas {
             bytemuck::cast_slice(&[current_uniforms]),
         );
 
-        // Calculate which texture to draw
-        let render_index = (self.sim.frame_num + 1) % 2;
-
         record_render_pass(
             encoder,
             view,
             &self.render_pipeline,
-            &self.render_bind_groups[render_index],
+            &self.render_bind_groups[0], // Hardcoded 0
             &self.vertex_buffer,
             &self.index_buffer,
             self.num_indices,

@@ -1,19 +1,19 @@
 struct BrushUniforms {
-    mouse_pos: vec2<f32>,      // Current Position
-    last_mouse_pos: vec2<f32>, // Previous Position (NEW)
+    mouse_pos: vec2<f32>,
+    last_mouse_pos: vec2<f32>,
     radius: f32,
     strength: f32,
 };
 
 @group(0) @binding(0) var<uniform> brush: BrushUniforms;
-@group(0) @binding(1) var input_texture: texture_2d<f32>;
-@group(0) @binding(2) var output_texture: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(1) var density_in: texture_2d<f32>;
+@group(0) @binding(2) var density_out: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(3) var velocity_in: texture_2d<f32>;
+@group(0) @binding(4) var velocity_out: texture_storage_2d<rg32float, write>;
 
-// Helper function: Distance squared to a line segment (p1 to p2)
 fn dist_sq_to_segment(p: vec2<f32>, p1: vec2<f32>, p2: vec2<f32>) -> f32 {
     let l2 = dot(p2 - p1, p2 - p1);
     if (l2 == 0.0) { return dot(p - p1, p - p1); }
-    
     let t = clamp(dot(p - p1, p2 - p1) / l2, 0.0, 1.0);
     let projection = p1 + t * (p2 - p1);
     return dot(p - projection, p - projection);
@@ -22,27 +22,36 @@ fn dist_sq_to_segment(p: vec2<f32>, p1: vec2<f32>, p2: vec2<f32>) -> f32 {
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let coords = vec2<i32>(id.xy);
-    let dims = vec2<i32>(textureDimensions(output_texture));
+    let dims = vec2<i32>(textureDimensions(density_out));
 
     if (coords.x >= dims.x || coords.y >= dims.y) {
         return;
     }
 
-    let pixel_pos = vec2<f32>(f32(coords.x), f32(coords.y));
-    
-    // 1. Calculate Distance to the "Capsule" (Line Segment)
-    // We use squared distance to avoid expensive sqrt() until the end
-    let d2 = dist_sq_to_segment(pixel_pos, brush.last_mouse_pos, brush.mouse_pos);
-    
-    let old_color = textureLoad(input_texture, coords, 0);
-    var new_alpha = old_color.a;
+    // 1. ALWAYS Read the Input (This is the Advected Result from Step 1)
+    let in_density = textureLoad(density_in, coords, 0);
+    let in_velocity = textureLoad(velocity_in, coords, 0);
 
-    // 2. Compare with Radius Squared
+    // 2. Prepare variables to hold the Final Value
+    var final_density = in_density;
+    var final_velocity = in_velocity;
+
+    // 3. If inside Brush, Modify the values
+    let pixel_pos = vec2<f32>(f32(coords.x), f32(coords.y));
+    let d2 = dist_sq_to_segment(pixel_pos, brush.last_mouse_pos, brush.mouse_pos);
+
     if (d2 < brush.radius * brush.radius) {
-        new_alpha += brush.strength;
+        // Add Density
+        let new_alpha = min(final_density.a + brush.strength, 1.0);
+        final_density = vec4<f32>(final_density.rgb, new_alpha);
+
+        // Add Velocity
+        let velocity_add = (brush.mouse_pos - brush.last_mouse_pos) * 5.0; // Tweak force here
+        final_velocity = vec4<f32>(final_velocity.xy + velocity_add, 0.0, 0.0);
     }
 
-    new_alpha = min(new_alpha, 1.0);
-    
-    textureStore(output_texture, coords, vec4<f32>(old_color.rgb, new_alpha));
+    // 4. ALWAYS Write to Output
+    // This ensures the advection (movement/fading) is applied to the whole screen
+    textureStore(density_out, coords, final_density);
+    textureStore(velocity_out, coords, final_velocity);
 }
