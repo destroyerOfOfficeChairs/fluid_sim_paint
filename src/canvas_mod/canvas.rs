@@ -102,7 +102,7 @@ impl Canvas {
     ) {
         // ALWAYS Run Physics (Advection)
         // Even if mouse is up, the fluid must move (or at least copy A -> B)
-        // self.sim.advect(encoder);
+        self.sim.advect(encoder);
 
         // CONDITIONALLY Run Input (Brush)
         if input.mouse_pressed {
