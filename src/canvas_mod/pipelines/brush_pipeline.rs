@@ -6,9 +6,8 @@ pub struct BrushUniforms {
     pub mouse_pos: [f32; 2],      // 8 bytes
     pub last_mouse_pos: [f32; 2], // 8 bytes
     pub radius: f32,              // 4 bytes
-    pub strength: f32,            // 4 bytes
     // MANUAL PADDING to align the next vec4 to 16-byte boundary
-    pub _padding: [f32; 2],    // 8 bytes
+    pub _padding: [f32; 3],    // 8 bytes
     pub brush_color: [f32; 4], // 16 bytes
 }
 
@@ -106,8 +105,7 @@ impl BrushPipeline {
             mouse_pos: [0.0, 0.0],
             last_mouse_pos: [0.0, 0.0],
             radius: 20.0,
-            strength: 0.0,
-            _padding: [0.0; 2], // Zero out padding
+            _padding: [0.0; 3], // Zero out padding
             brush_color: [0.0, 0.0, 0.0, 1.0],
         };
 

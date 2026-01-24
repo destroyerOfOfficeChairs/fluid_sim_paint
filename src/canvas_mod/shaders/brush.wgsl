@@ -2,7 +2,7 @@ struct BrushUniforms {
     mouse_pos: vec2<f32>,
     last_mouse_pos: vec2<f32>,
     radius: f32,
-    strength: f32,
+    // Shader automatically handles the padding to align the next vec4
     brush_color: vec4<f32>,
 };
 
@@ -42,16 +42,15 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let d2 = dist_sq_to_segment(pixel_pos, brush.last_mouse_pos, brush.mouse_pos);
 
     if (d2 < brush.radius * brush.radius) {
-        // 1. Calculate mix amount (strength)
-        let amount = brush.strength;
+        // The Alpha of the brush IS the amount we add.
+        let amount = brush.brush_color.a;
         
-        // 2. Mix Alpha (Density)
-        let new_alpha = min(final_density.a + amount, 1.0);
+        // Target Mix (Marker Style)
+        // Interpolate current density towards 1.0 based on alpha
+        let new_alpha = mix(final_density.a, 1.0, amount);
         
-        // 3. Mix Color (RGB)
-        // If density is low, we just take the brush color.
-        // If density is high, we mix towards the brush color.
-        // Note: We use .rgb to ignore the padding
+        // Color Mix
+        // Interpolate current color towards brush color based on alpha
         let mixed_rgb = mix(final_density.rgb, brush.brush_color.rgb, amount);
         
         final_density = vec4<f32>(mixed_rgb, new_alpha);

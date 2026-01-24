@@ -93,24 +93,7 @@ impl Gui {
                     ui.add(egui::DragValue::new(&mut self.params.canvas_height));
                 });
                 ui.separator();
-                // 1. LOAD: Create a temporary color from your struct
-                let mut current_color = egui::Color32::from_rgba_unmultiplied(
-                    (self.params.brush_color[0] * 255.0) as u8,
-                    (self.params.brush_color[1] * 255.0) as u8,
-                    (self.params.brush_color[2] * 255.0) as u8,
-                    (self.params.brush_color[3] * 255.0) as u8,
-                );
-
-                // 2. EDIT: Let the user change the temporary color
-                if ui.color_edit_button_srgba(&mut current_color).changed() {
-                    // 3. STORE: Write the result back to your struct
-                    self.params.brush_color = [
-                        current_color.r() as f32 / 255.0,
-                        current_color.g() as f32 / 255.0,
-                        current_color.b() as f32 / 255.0,
-                        current_color.a() as f32 / 255.0,
-                    ];
-                }
+                ui.color_edit_button_rgba_unmultiplied(&mut self.params.brush_color);
             });
 
         // Tessellate shapes into primitives

@@ -273,8 +273,7 @@ impl FluidSim {
             mouse_pos: current_pos,
             last_mouse_pos: last_pos,
             radius: params.brush_size / params.zoom_level,
-            strength: 1.0,
-            _padding: [0.0; 2], // Zero out padding
+            _padding: [0.0; 3], // Zero out padding
             brush_color: params.brush_color,
         };
         queue.write_buffer(
