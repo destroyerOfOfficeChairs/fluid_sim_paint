@@ -315,4 +315,28 @@ impl FluidSim {
         let y_groups = (self.height as f32 / 16.0).ceil() as u32;
         compute_pass.dispatch_workgroups(x_groups, y_groups, 1);
     }
+
+    pub fn clear(&self, encoder: &mut CommandEncoder) {
+        let mut clear_tex = |tex: &Texture| {
+            encoder.clear_texture(
+                &tex.texture,
+                &wgpu::ImageSubresourceRange {
+                    aspect: wgpu::TextureAspect::All,
+                    base_mip_level: 0,
+                    mip_level_count: None,
+                    base_array_layer: 0,
+                    array_layer_count: None,
+                },
+            );
+        };
+
+        // Wipe everything
+        clear_tex(&self.density_a);
+        clear_tex(&self.density_b);
+        clear_tex(&self.velocity_a);
+        clear_tex(&self.velocity_b);
+        clear_tex(&self.pressure_a);
+        clear_tex(&self.pressure_b);
+        clear_tex(&self.divergence);
+    }
 }

@@ -100,6 +100,9 @@ impl Canvas {
         params: &GuiParams,
         screen_size: (u32, u32),
     ) {
+        if input.clear_requested {
+            self.sim.clear(encoder);
+        }
         // 1. Step 1: Advect (A -> B)
         self.sim.advect(queue, encoder, params);
 

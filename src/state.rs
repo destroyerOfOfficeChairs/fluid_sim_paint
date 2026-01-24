@@ -14,6 +14,7 @@ pub struct InteractionState {
     pub mouse_pos: [f32; 2],
     pub last_mouse_pos: [f32; 2],
     pub mouse_pressed: bool,
+    pub clear_requested: bool,
 }
 
 impl Default for InteractionState {
@@ -22,6 +23,7 @@ impl Default for InteractionState {
             mouse_pos: [0.0, 0.0],
             last_mouse_pos: [0.0, 0.0],
             mouse_pressed: false,
+            clear_requested: false,
         }
     }
 }
@@ -110,6 +112,9 @@ impl State {
                     .window
                     .set_fullscreen(Some(Fullscreen::Borderless(None))),
             },
+            KeyCode::Delete => {
+                self.input.clear_requested = true;
+            }
             _ => {}
         }
     }
@@ -139,6 +144,7 @@ impl State {
             &self.gui.params,
             (self.config.width, self.config.height),
         );
+        self.input.clear_requested = false;
 
         // RENDER CANVAS (Draw to Screen)
         self.canvas.render(
