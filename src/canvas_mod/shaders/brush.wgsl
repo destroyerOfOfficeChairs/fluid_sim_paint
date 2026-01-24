@@ -1,6 +1,7 @@
 struct BrushUniforms {
     mouse_pos: vec2<f32>,
     last_mouse_pos: vec2<f32>,
+    velocity_factor: f32,
     radius: f32,
     // Shader automatically handles the padding to align the next vec4
     brush_color: vec4<f32>,
@@ -56,7 +57,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         final_density = vec4<f32>(mixed_rgb, new_alpha);
 
         // Add Velocity
-        let velocity_add = (brush.mouse_pos - brush.last_mouse_pos) * 5.0; // Tweak force here
+        let velocity_add = (brush.mouse_pos - brush.last_mouse_pos) * brush.velocity_factor; // Tweak force here
         final_velocity = vec4<f32>(final_velocity.xy + velocity_add, 0.0, 0.0);
     }
 

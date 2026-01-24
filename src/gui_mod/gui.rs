@@ -12,6 +12,7 @@ pub struct GuiParams {
     pub brush_color: [f32; 4],
     pub velocity_decay: f32,
     pub ink_decay: f32,
+    pub velocity_factor: f32,
 }
 
 impl Default for GuiParams {
@@ -24,6 +25,7 @@ impl Default for GuiParams {
             brush_color: [0.0, 0.0, 0.0, 1.0],
             velocity_decay: 1.0,
             ink_decay: 1.0,
+            velocity_factor: 1.0,
         }
     }
 }
@@ -106,6 +108,10 @@ impl Gui {
                 );
                 ui.add(
                     egui::Slider::new(&mut self.params.ink_decay, 0.90..=1.0).text("Evaporation"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.params.velocity_factor, 0.0..=5.0)
+                        .text("Velocity Factor"),
                 );
             });
 
