@@ -274,6 +274,8 @@ impl FluidSim {
             last_mouse_pos: last_pos,
             radius: params.brush_size / params.zoom_level,
             strength: 1.0,
+            _padding: [0.0; 2], // Zero out padding
+            brush_color: params.brush_color,
         };
         queue.write_buffer(
             &self.brush_pipeline.brush_buffer,

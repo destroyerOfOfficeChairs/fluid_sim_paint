@@ -46,17 +46,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 1. Sample the Simulation Texture
     let fluid_data = textureSample(density_texture, density_sampler, in.tex_coords);
     
-    // RGB = Color (Black for now), A = Density
+    // RGB = The actual color in the fluid
+    let ink_color = fluid_data.rgb;
+    // A = How much ink is there
     let density = fluid_data.a;
 
-    // 2. Define Colors
-    let paper_color = vec3<f32>(1.0, 1.0, 1.0); // Pure WHITE Paper
-    let ink_color   = vec3<f32>(0.0, 0.0, 0.0); // Pure BLACK Ink
+    let paper_color = vec3<f32>(1.0, 1.0, 1.0); // White paper
 
-    // 3. Blend Ink onto Paper 
-    // mix(paper, ink, density) means:
-    // If density is 0.0, show Paper.
-    // If density is 1.0, show Ink.
+    // Blend Ink onto Paper 
     let final_color = mix(paper_color, ink_color, density);
 
     return vec4<f32>(final_color, 1.0);

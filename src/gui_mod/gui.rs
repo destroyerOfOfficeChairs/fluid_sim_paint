@@ -9,6 +9,7 @@ pub struct GuiParams {
     pub brush_size: f32,
     pub canvas_width: u32,
     pub canvas_height: u32,
+    pub brush_color: [f32; 4],
 }
 
 impl Default for GuiParams {
@@ -18,6 +19,7 @@ impl Default for GuiParams {
             brush_size: 20.0,
             canvas_width: 1920,
             canvas_height: 1080,
+            brush_color: [0.0, 0.0, 0.0, 1.0],
         }
     }
 }
@@ -90,6 +92,25 @@ impl Gui {
                     ui.label("H:");
                     ui.add(egui::DragValue::new(&mut self.params.canvas_height));
                 });
+                ui.separator();
+                // 1. LOAD: Create a temporary color from your struct
+                let mut current_color = egui::Color32::from_rgba_unmultiplied(
+                    (self.params.brush_color[0] * 255.0) as u8,
+                    (self.params.brush_color[1] * 255.0) as u8,
+                    (self.params.brush_color[2] * 255.0) as u8,
+                    (self.params.brush_color[3] * 255.0) as u8,
+                );
+
+                // 2. EDIT: Let the user change the temporary color
+                if ui.color_edit_button_srgba(&mut current_color).changed() {
+                    // 3. STORE: Write the result back to your struct
+                    self.params.brush_color = [
+                        current_color.r() as f32 / 255.0,
+                        current_color.g() as f32 / 255.0,
+                        current_color.b() as f32 / 255.0,
+                        current_color.a() as f32 / 255.0,
+                    ];
+                }
             });
 
         // Tessellate shapes into primitives

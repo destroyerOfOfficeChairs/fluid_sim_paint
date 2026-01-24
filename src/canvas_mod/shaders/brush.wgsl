@@ -3,6 +3,7 @@ struct BrushUniforms {
     last_mouse_pos: vec2<f32>,
     radius: f32,
     strength: f32,
+    brush_color: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> brush: BrushUniforms;
@@ -41,9 +42,19 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let d2 = dist_sq_to_segment(pixel_pos, brush.last_mouse_pos, brush.mouse_pos);
 
     if (d2 < brush.radius * brush.radius) {
-        // Add Density
-        let new_alpha = min(final_density.a + brush.strength, 1.0);
-        final_density = vec4<f32>(final_density.rgb, new_alpha);
+        // 1. Calculate mix amount (strength)
+        let amount = brush.strength;
+        
+        // 2. Mix Alpha (Density)
+        let new_alpha = min(final_density.a + amount, 1.0);
+        
+        // 3. Mix Color (RGB)
+        // If density is low, we just take the brush color.
+        // If density is high, we mix towards the brush color.
+        // Note: We use .rgb to ignore the padding
+        let mixed_rgb = mix(final_density.rgb, brush.brush_color.rgb, amount);
+        
+        final_density = vec4<f32>(mixed_rgb, new_alpha);
 
         // Add Velocity
         let velocity_add = (brush.mouse_pos - brush.last_mouse_pos) * 5.0; // Tweak force here
