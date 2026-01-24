@@ -1,8 +1,9 @@
 struct AdvectionUniforms {
-    dt: f32,             // Time step (e.g., 0.016)
-    width: f32,          // Sim width
-    height: f32,         // Sim height
-    dissipation: f32,    // Decay (0.99 = slow fade, 1.0 = forever)
+    dt: f32,
+    width: f32,
+    height: f32,
+    velocity_decay: f32,
+    ink_decay: f32,
 };
 
 @group(0) @binding(0) var<uniform> params: AdvectionUniforms;
@@ -46,10 +47,13 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let advected_density = textureSampleLevel(density_in, tex_sampler, back_uv, 0.0);
     let advected_velocity = textureSampleLevel(velocity_in, tex_sampler, back_uv, 0.0);
 
-    // 5. Apply Dissipation (Fade out slightly)
-    let new_density = advected_density * params.dissipation;
-    // Velocity also decays, otherwise water spins forever
-    let new_velocity = advected_velocity.xy * params.dissipation; 
+    // 5. Apply Specific Dissipation
+    
+    // Ink uses ink_decay (1.0 = stays forever)
+    let new_density = advected_density * params.ink_decay;
+    
+    // Velocity uses velocity_decay (0.99 = slows down)
+    let new_velocity = advected_velocity.xy * params.velocity_decay; 
 
     // 6. Write Result
     textureStore(density_out, coords, new_density);

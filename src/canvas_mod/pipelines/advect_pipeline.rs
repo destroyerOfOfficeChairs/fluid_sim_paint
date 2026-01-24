@@ -6,7 +6,9 @@ pub struct AdvectionUniforms {
     pub dt: f32,
     pub width: f32,
     pub height: f32,
-    pub dissipation: f32,
+    pub velocity_decay: f32, // Friction (e.g. 0.99)
+    pub ink_decay: f32,      // Evaporation (e.g. 1.0)
+    pub _padding: [f32; 3],  // Optional: Pad to 32 bytes to be safe/clean
 }
 
 pub struct AdvectionPipeline {
@@ -107,10 +109,15 @@ impl AdvectionPipeline {
         });
 
         let initial_data = AdvectionUniforms {
-            dt: 0.016, // 60 FPS
+            dt: 0.016,
             width: width as f32,
             height: height as f32,
-            dissipation: 0.999, // Fade factor (Ink slowly disappears)
+
+            // PHYSICS SETTINGS:
+            velocity_decay: 0.7, // Slows down and stops after ~2-3 seconds
+            ink_decay: 1.0,      // Paint stays forever
+
+            _padding: [0.0; 3],
         };
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

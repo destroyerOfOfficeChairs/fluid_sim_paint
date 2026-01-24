@@ -10,6 +10,8 @@ pub struct GuiParams {
     pub canvas_width: u32,
     pub canvas_height: u32,
     pub brush_color: [f32; 4],
+    pub velocity_decay: f32,
+    pub ink_decay: f32,
 }
 
 impl Default for GuiParams {
@@ -20,6 +22,8 @@ impl Default for GuiParams {
             canvas_width: 1920,
             canvas_height: 1080,
             brush_color: [0.0, 0.0, 0.0, 1.0],
+            velocity_decay: 1.0,
+            ink_decay: 1.0,
         }
     }
 }
@@ -93,7 +97,16 @@ impl Gui {
                     ui.add(egui::DragValue::new(&mut self.params.canvas_height));
                 });
                 ui.separator();
+                ui.label("Color");
                 ui.color_edit_button_rgba_unmultiplied(&mut self.params.brush_color);
+                ui.separator();
+                ui.label("Fluid Physics");
+                ui.add(
+                    egui::Slider::new(&mut self.params.velocity_decay, 0.0..=1.0).text("Friction"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.params.ink_decay, 0.90..=1.0).text("Evaporation"),
+                );
             });
 
         // Tessellate shapes into primitives

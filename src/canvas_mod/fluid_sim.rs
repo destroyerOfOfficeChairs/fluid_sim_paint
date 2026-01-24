@@ -1,4 +1,4 @@
-use super::pipelines::advect_pipeline::AdvectionPipeline;
+use super::pipelines::advect_pipeline::{AdvectionPipeline, AdvectionUniforms};
 use super::pipelines::brush_pipeline::{BrushPipeline, BrushUniforms};
 use super::pipelines::pressure_pipeline::PressurePipeline;
 use super::resources::texture::{Texture, create_sim_textures};
@@ -247,7 +247,27 @@ impl FluidSim {
         );
     }
 
-    pub fn advect(&self, encoder: &mut CommandEncoder) {
+    // Update signature to accept Queue and Params
+    pub fn advect(&self, queue: &Queue, encoder: &mut CommandEncoder, params: &GuiParams) {
+        // 1. Create the new Uniform data from the UI params
+        let uniforms = AdvectionUniforms {
+            dt: 0.016,
+            width: self.width as f32,
+            height: self.height as f32,
+            // Connect UI Sliders to Physics
+            velocity_decay: params.velocity_decay,
+            ink_decay: params.ink_decay,
+            _padding: [0.0; 3],
+        };
+
+        // 2. Upload it to the GPU
+        queue.write_buffer(
+            &self.advect_pipeline.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[uniforms]),
+        );
+
+        // 3. Dispatch (Same as before)
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Advection Pass"),
             timestamp_writes: None,

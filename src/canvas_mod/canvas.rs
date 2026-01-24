@@ -101,7 +101,7 @@ impl Canvas {
         screen_size: (u32, u32),
     ) {
         // 1. Step 1: Advect (A -> B)
-        self.sim.advect(encoder);
+        self.sim.advect(queue, encoder, params);
 
         // 2. Step 2: Brush (B -> A)
         // If mouse is pressed, we run the brush shader which reads B and writes A.
