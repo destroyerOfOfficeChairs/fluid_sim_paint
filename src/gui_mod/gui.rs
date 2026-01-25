@@ -14,6 +14,7 @@ pub struct GuiParams {
     pub ink_decay: f32,
     pub velocity_factor: f32,
     pub viscosity: f32,
+    pub smudge: bool,
 }
 
 impl Default for GuiParams {
@@ -28,6 +29,7 @@ impl Default for GuiParams {
             ink_decay: 1.0,
             velocity_factor: 1.0,
             viscosity: 1.0,
+            smudge: false,
         }
     }
 }
@@ -116,6 +118,10 @@ impl Gui {
                         .text("Velocity Factor"),
                 );
                 ui.add(egui::Slider::new(&mut self.params.viscosity, 0.0..=1.0).text("Viscosity"));
+                ui.separator();
+                ui.label("Tool Mode");
+                // Use a Checkbox (or Toggle Switch if you use a specific crate for it)
+                ui.checkbox(&mut self.params.smudge, "Smudge Tool");
             });
 
         // Tessellate shapes into primitives

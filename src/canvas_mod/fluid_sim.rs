@@ -400,13 +400,15 @@ impl FluidSim {
         last_pos: [f32; 2],
         params: &GuiParams,
     ) {
+        let smudge_val = if params.smudge { 1.0 } else { 0.0 };
         // Update Uniforms
         let brush_data = BrushUniforms {
             mouse_pos: current_pos,
             last_mouse_pos: last_pos,
             velocity_factor: params.velocity_factor,
             radius: params.brush_size / params.zoom_level,
-            _padding: [0.0; 2], // Zero out padding
+            smudge: smudge_val,
+            _padding: [0.0; 1], // Zero out padding
             brush_color: params.brush_color,
         };
         queue.write_buffer(

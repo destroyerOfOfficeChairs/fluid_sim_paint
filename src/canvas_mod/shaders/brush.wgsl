@@ -3,6 +3,7 @@ struct BrushUniforms {
     last_mouse_pos: vec2<f32>,
     velocity_factor: f32,
     radius: f32,
+    smudge: f32,
     // Shader automatically handles the padding to align the next vec4
     brush_color: vec4<f32>,
 };
@@ -43,22 +44,60 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let d2 = dist_sq_to_segment(pixel_pos, brush.last_mouse_pos, brush.mouse_pos);
 
     if (d2 < brush.radius * brush.radius) {
-        // The Alpha of the brush IS the amount we add.
-        let amount = brush.brush_color.a;
-        
-        // Target Mix (Marker Style)
-        // Interpolate current density towards 1.0 based on alpha
-        let new_alpha = mix(final_density.a, 1.0, amount);
-        
-        // Color Mix
-        // Interpolate current color towards brush color based on alpha
-        let mixed_rgb = mix(final_density.rgb, brush.brush_color.rgb, amount);
-        
-        final_density = vec4<f32>(mixed_rgb, new_alpha);
+        // MODE 1: BLENDER (Smudge)
+        if (brush.smudge > 0.5) {
+            let c = textureLoad(density_in, coords, 0);
 
-        // Add Velocity
-        let velocity_add = (brush.mouse_pos - brush.last_mouse_pos) * brush.velocity_factor; // Tweak force here
-        final_velocity = vec4<f32>(final_velocity.xy + velocity_add, 0.0, 0.0);
+            // --- NEW: STRONGER BLUR ---
+            var total_color = vec4<f32>(0.0);
+            var count = 0.0;
+            
+            // Radius 4 means we sample a 9x9 box (81 pixels!)
+            // Increase this number to 5 or 6 for an even bigger blur.
+            let blur_radius = 4; 
+
+            for (var x = -blur_radius; x <= blur_radius; x++) {
+                for (var y = -blur_radius; y <= blur_radius; y++) {
+                    let neighbor_pos = coords + vec2<i32>(x, y);
+                    
+                    // Safety: clamp to screen size so we don't crash at the edges
+                    let safe_pos = clamp(neighbor_pos, vec2<i32>(0, 0), dims - vec2<i32>(1, 1));
+                    
+                    total_color += textureLoad(density_in, safe_pos, 0);
+                    count += 1.0;
+                }
+            }
+
+            let blurred = total_color / count;
+            
+            // Mix 90% of the blurred color in (was 0.5 before)
+            // This makes the smudge instant instead of gradual.
+            final_density = mix(c, blurred, 0.9);
+            // ---------------------------
+
+            // CRITICAL: We still add velocity! 
+            let velocity_add = (brush.mouse_pos - brush.last_mouse_pos) * brush.velocity_factor;
+            final_velocity = vec4<f32>(final_velocity.xy + velocity_add, 0.0, 0.0);
+
+        } else {
+            // MODE 2: PAINTER (Add Ink)
+            // The Alpha of the brush IS the amount we add.
+            let amount = brush.brush_color.a;
+            
+            // Target Mix (Marker Style)
+            // Interpolate current density towards 1.0 based on alpha
+            let new_alpha = mix(final_density.a, 1.0, amount);
+            
+            // Color Mix
+            // Interpolate current color towards brush color based on alpha
+            let mixed_rgb = mix(final_density.rgb, brush.brush_color.rgb, amount);
+            
+            final_density = vec4<f32>(mixed_rgb, new_alpha);
+
+            // Add Velocity
+            let velocity_add = (brush.mouse_pos - brush.last_mouse_pos) * brush.velocity_factor; // Tweak force here
+            final_velocity = vec4<f32>(final_velocity.xy + velocity_add, 0.0, 0.0);
+        }
     }
 
     // 4. ALWAYS Write to Output
