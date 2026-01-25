@@ -65,6 +65,7 @@ pub fn create_sim_textures(
     Texture,
     Texture,
     Texture,
+    Texture,
 ) {
     let closure = |name: &str, texture_type: wgpu::TextureFormat| {
         Texture::create_storage_texture(device, sim_width, sim_height, texture_type, Some(name))
@@ -76,7 +77,15 @@ pub fn create_sim_textures(
     let pressure_a = closure("Pressure A", wgpu::TextureFormat::R32Float);
     let pressure_b = closure("Pressure B", wgpu::TextureFormat::R32Float);
     let divergence = closure("Pressure A", wgpu::TextureFormat::R32Float);
+    let temp_density = closure("Temp Density", wgpu::TextureFormat::Rgba32Float);
     (
-        density_a, density_b, velocity_a, velocity_b, pressure_a, pressure_b, divergence,
+        density_a,
+        density_b,
+        velocity_a,
+        velocity_b,
+        pressure_a,
+        pressure_b,
+        divergence,
+        temp_density,
     )
 }

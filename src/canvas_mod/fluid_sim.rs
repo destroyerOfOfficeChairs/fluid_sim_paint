@@ -1,5 +1,6 @@
 use super::pipelines::advect_pipeline::{AdvectionPipeline, AdvectionUniforms};
 use super::pipelines::brush_pipeline::{BrushPipeline, BrushUniforms};
+use super::pipelines::diffuse_pipeline::{DiffusePipeline, DiffuseUniforms};
 use super::pipelines::pressure_pipeline::PressurePipeline;
 use super::resources::texture::{Texture, create_sim_textures};
 use crate::gui_mod::gui::GuiParams;
@@ -16,6 +17,7 @@ pub struct FluidSim {
     pub divergence: Texture,
     pub pressure_a: Texture,
     pub pressure_b: Texture,
+    pub temp_density: Texture,
 
     brush_pipeline: BrushPipeline,
     advect_pipeline: AdvectionPipeline,
@@ -26,12 +28,22 @@ pub struct FluidSim {
     div_bind_group: BindGroup,
     jacobi_bind_groups: Vec<BindGroup>, // Needs A->B and B->A
     sub_bind_group: BindGroup,
+    diffuse_pipeline: DiffusePipeline,
+    diffuse_bind_groups: Vec<BindGroup>, // Ping-Pong groups
 }
 
 impl FluidSim {
     pub fn new(device: &Device, width: u32, height: u32) -> Self {
-        let (density_a, density_b, velocity_a, velocity_b, pressure_a, pressure_b, divergence) =
-            create_sim_textures(device, width, height);
+        let (
+            density_a,
+            density_b,
+            velocity_a,
+            velocity_b,
+            pressure_a,
+            pressure_b,
+            divergence,
+            temp_density,
+        ) = create_sim_textures(device, width, height);
 
         let brush_pipeline = BrushPipeline::new(device);
         let advect_pipeline = AdvectionPipeline::new(device, width, height);
@@ -177,6 +189,43 @@ impl FluidSim {
             ],
         });
 
+        let diffuse_pipeline = DiffusePipeline::new(device, width, height);
+
+        // UPDATE: Bind Groups for Diffusion
+        let create_diffuse_bg = |x_in: &Texture, b_in: &Texture, x_out: &Texture| -> BindGroup {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Diffuse BG"),
+                layout: &diffuse_pipeline.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: diffuse_pipeline.uniform_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&x_in.view),
+                    },
+                    // KEY FIX: This binding (2) is 'b_in' (Source).
+                    // We will now always pass the 'temp_density' here.
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&b_in.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&x_out.view),
+                    },
+                ],
+            })
+        };
+
+        let diffuse_bind_groups = vec![
+            // 0: Read A, Source = TEMP, Write B
+            create_diffuse_bg(&density_a, &temp_density, &density_b),
+            // 1: Read B, Source = TEMP, Write A
+            create_diffuse_bg(&density_b, &temp_density, &density_a),
+        ];
+
         Self {
             width,
             height,
@@ -195,7 +244,70 @@ impl FluidSim {
             pressure_pipeline,
             advect_bind_group,
             brush_bind_group,
+            temp_density,
+            diffuse_bind_groups,
+            diffuse_pipeline,
         }
+    }
+
+    pub fn diffuse(&self, queue: &Queue, encoder: &mut CommandEncoder, viscosity: f32) {
+        if viscosity <= 0.0 {
+            return;
+        } // No diffusion needed
+
+        // --- THE MATH ---
+        // Formula: x = (neighbors + alpha * original) / beta
+        // alpha = 1 / (viscosity * dt)
+        // beta = 4 + alpha
+
+        // 1. SAFEGUARD: Copy Density A (Source) to Temp (b_in)
+        // This snapshots the density so we can read it stably while writing new values.
+        encoder.copy_texture_to_texture(
+            self.density_a.texture.as_image_copy(),
+            self.temp_density.texture.as_image_copy(),
+            self.density_a.texture.size(),
+        );
+
+        let dt = 0.016;
+        let dx = 1.0; // Pixel size
+
+        // High Viscosity = Small Alpha (Neighbors dominate)
+        // Low Viscosity  = Large Alpha (Original dominates)
+        let alpha = (dx * dx) / (viscosity * dt);
+        let beta = 4.0 + alpha;
+
+        // Upload to GPU
+        let uniforms = DiffuseUniforms {
+            width: self.width as f32,
+            height: self.height as f32,
+            alpha,
+            one_over_beta: 1.0 / beta, // Optimization: Multiply instead of divide
+        };
+        queue.write_buffer(
+            &self.diffuse_pipeline.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[uniforms]),
+        );
+
+        // --- THE SOLVER (Jacobi Iteration) ---
+        let x_groups = (self.width as f32 / 16.0).ceil() as u32;
+        let y_groups = (self.height as f32 / 16.0).ceil() as u32;
+
+        // 20 Iterations is usually enough for visual diffusion
+        for i in 0..20 {
+            let idx = i % 2;
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Diffuse Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.diffuse_pipeline.pipeline);
+            pass.set_bind_group(0, &self.diffuse_bind_groups[idx], &[]);
+            pass.dispatch_workgroups(x_groups, y_groups, 1);
+        }
+
+        // Ensure Density A has the final result (if we ended on B, copy B->A)
+        // Since we run 20 iterations (even number), we end writing to A.
+        // So no copy needed! (0->1, 1->0, ... 19->0).
     }
 
     pub fn project(&mut self, encoder: &mut CommandEncoder) {

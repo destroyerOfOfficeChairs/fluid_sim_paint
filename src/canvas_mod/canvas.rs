@@ -103,10 +103,16 @@ impl Canvas {
         if input.clear_requested {
             self.sim.clear(encoder);
         }
-        // 1. Step 1: Advect (A -> B)
+
+        // 1. Diffuse (Spread Ink) <--- NEW STEP
+        // Add a 'diffusion' slider to your GuiParams!
+        // For now, hardcode 0.001 to test.
+        self.sim.diffuse(queue, encoder, 0.001);
+
+        // 2. Step 1: Advect (A -> B)
         self.sim.advect(queue, encoder, params);
 
-        // 2. Step 2: Brush (B -> A)
+        // 3. Step 2: Brush (B -> A)
         // If mouse is pressed, we run the brush shader which reads B and writes A.
         if input.mouse_pressed {
             self.apply_brush(queue, encoder, input, params, screen_size);
@@ -127,7 +133,7 @@ impl Canvas {
             );
         }
 
-        // 3. Project (Clean up Velocity A -> B -> A)
+        // 4. Project (Clean up Velocity A -> B -> A)
         // This makes the liquid swirly!
         self.sim.project(encoder);
     }
