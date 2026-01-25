@@ -250,8 +250,8 @@ impl FluidSim {
         }
     }
 
-    pub fn diffuse(&self, queue: &Queue, encoder: &mut CommandEncoder, viscosity: f32) {
-        if viscosity <= 0.0 {
+    pub fn diffuse(&self, queue: &Queue, encoder: &mut CommandEncoder, params: &GuiParams) {
+        if params.viscosity <= 0.0 {
             return;
         } // No diffusion needed
 
@@ -273,7 +273,7 @@ impl FluidSim {
 
         // High Viscosity = Small Alpha (Neighbors dominate)
         // Low Viscosity  = Large Alpha (Original dominates)
-        let alpha = (dx * dx) / (viscosity * dt);
+        let alpha = (dx * dx) / (params.viscosity * dt);
         let beta = 4.0 + alpha;
 
         // Upload to GPU
@@ -294,7 +294,7 @@ impl FluidSim {
         let y_groups = (self.height as f32 / 16.0).ceil() as u32;
 
         // 20 Iterations is usually enough for visual diffusion
-        for i in 0..20 {
+        for i in 0..50 {
             let idx = i % 2;
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Diffuse Pass"),

@@ -13,6 +13,7 @@ pub struct GuiParams {
     pub velocity_decay: f32,
     pub ink_decay: f32,
     pub velocity_factor: f32,
+    pub viscosity: f32,
 }
 
 impl Default for GuiParams {
@@ -26,6 +27,7 @@ impl Default for GuiParams {
             velocity_decay: 1.0,
             ink_decay: 1.0,
             velocity_factor: 1.0,
+            viscosity: 1.0,
         }
     }
 }
@@ -113,6 +115,7 @@ impl Gui {
                     egui::Slider::new(&mut self.params.velocity_factor, 0.0..=5.0)
                         .text("Velocity Factor"),
                 );
+                ui.add(egui::Slider::new(&mut self.params.viscosity, 0.0..=1.0).text("Viscosity"));
             });
 
         // Tessellate shapes into primitives

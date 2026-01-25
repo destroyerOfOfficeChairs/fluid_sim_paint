@@ -107,7 +107,7 @@ impl Canvas {
         // 1. Diffuse (Spread Ink) <--- NEW STEP
         // Add a 'diffusion' slider to your GuiParams!
         // For now, hardcode 0.001 to test.
-        self.sim.diffuse(queue, encoder, 0.001);
+        self.sim.diffuse(queue, encoder, params);
 
         // 2. Step 1: Advect (A -> B)
         self.sim.advect(queue, encoder, params);
